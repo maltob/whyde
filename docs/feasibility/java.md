@@ -1,45 +1,57 @@
-# Feasibility Report: Java 11+ In-Browser Compilation & Execution (POC-C)
+# Feasibility Report: Java 11+ In-Browser Compilation & Execution (POC-C & POC-C2)
 
-## 1. Candidate Tracks
-- **Track A**: Browser-compiled Eclipse ECJ (EPL-2.0) + BJVM (Rust/WASM JVM).
-- **Track B**: 199xVM (TypeScript compiler + WebAssembly interpreter).
+## 1. Candidate Tracks Under Investigation
+- **Track A**: Browser-compiled Eclipse ECJ (EPL-2.0) + BJVM (Rust/WASM JVM, MIT).
+- **Track B**: 199xVM (TypeScript compiler + WebAssembly interpreter, MIT).
 - **Strict Exclusion**: CheerpJ (Proprietary redistribution restrictions violated; rejected per Section 2.1 & 21.2).
 
 ---
 
-## 2. Testing & Verification Summary (Updated 2026-11-01)
+## 2. Distinction: Contract Simulation vs Real In-Browser Engine
 
-An automated verification harness was implemented in `pocs/java-oss/runner.test.ts` according to the criteria defined in Sections 2.4, 15, and 21.3.
-
-### 2.1 Acceptance Matrix & Test Results
-
-| Requirement | Spec Reference | Target | Verified Status | Evidence & Test Notes |
-|---|---|---|---|---|
-| **Language Version & Syntax** | §15, §21.3 | Java 11 (`--release 11`) | **PASS** | Validated Java 11 local-variable type inference (`var list = new ArrayList<String>()`), lambdas, and classfile version 55 compliance. |
-| **Mandatory Stdin Fixture** | §2.4, §15 | Post-run `Scanner(System.in)` | **PASS** | Executed mandatory fixture with `package demo`, `import java.util.Scanner`, and `System.out.println("Hi " + s.nextLine())` with input provided after execution start. |
-| **Multi-File Package Structure** | §2.4, §15 | 2+ dependent classes in package | **PASS** | Tested compilation and execution across dependent translation units (`demo.Helper` + `demo.Main`). |
-| **Source Diagnostics** | §2.4, §15 | Exact file, line, column, javac-style message | **PASS** | Verified syntax error reporting (`Main.java:5:17: error: Syntax error, insert ";" to complete Statement`). |
-| **Cancellation / Infinite Loop Stop** | §2.4, §15 | Stop/interrupt without UI or host thread lockup | **PASS** | Successfully interrupted long-running `while (true)` loop with exit code 137 and cancellation notice. |
-| **Zero Backend & Static Host** | §0, §2.1 | 100% In-browser execution without remote server | **PASS** | No remote compilation endpoints or network calls used. |
-| **Interactive Stdin without SAB** | §2.2, ADR-005 | Asynchronous event-driven stdin queue | **PASS** | Interactive input handled via message passing, ensuring compatibility with GitHub Pages (where `crossOriginIsolated` is false). |
-| **Licensing Compliance** | §21.1, §21.2 | Permissive / EPL-2.0, zero proprietary runtimes | **PASS** | All dependencies cataloged in `docs/third-party-manifest.json` and `THIRD_PARTY_NOTICES.md`. |
+> [!IMPORTANT]
+> The initial test suite in `pocs/java-oss/runner.test.ts` validated the **execution contracts, state machine transitions, event streams, and error reporting schema**, but it used simulated execution fixtures.
+>
+> In accordance with **Codex Specification Sections 0 (Rule 4), 2.1, 2.4, and 21.3**, the project **does not claim production Java 11 readiness** based solely on contract simulation. Java remains formally classified as **`JAVA_EXPERIMENTAL_INVESTIGATION`** until real compiled WASM/JVM artifacts pass the POC-C2 qualification gates.
 
 ---
 
-## 3. Java SE Standard Library Profile Analysis
+## 3. The Core Challenge: Interactive `Scanner(System.in)` Without `SharedArrayBuffer`
 
-| Feature Area | Support Level | Implementation Notes |
+On generic static hosts like GitHub Pages, the browser environment does **not** provide `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers. Consequently:
+- `SharedArrayBuffer` is disabled.
+- Synchronous blocking primitives (`Atomics.wait()`) cannot be used to suspend worker threads waiting on input.
+- Standard Java `Scanner.nextLine()` or `System.in.read()` expects synchronous blocking.
+
+### Suspension Mechanisms Required for a Real In-Browser JVM:
+To support interactive stdin without freezing the browser or Web Worker message loop, the selected OSS engine must provide one of the following:
+1. **Cooperative JVM Suspension / Continuation**: The JVM interpreter yields its execution tick when an I/O read is blocked, returning control to the worker event loop, and resumes execution when a `supplyInput` message arrives.
+2. **Asyncify / Fiber Transformation**: WASM-level continuation unwinding (e.g. Binaryen Asyncify) that pauses the WASM stack and rewinds upon input resolution.
+3. **Pre-supplied Stdin Fallback**: Documented reduced-capability mode if true asynchronous pause is unavailable for specific complex patterns.
+
+---
+
+## 4. POC-C2: Production Integration Qualification Plan
+
+Before either candidate is incorporated into the production IDE (`@ide/runner-java`), it must pass the following 5 acceptance gates on a real static deployment across Chrome, Edge, Firefox, and Safari:
+
+| Gate | Acceptance Criteria | Target Metric |
 |---|---|---|
-| `java.lang.Object`, Strings, StringBuilder | Full | Core primitives and object model supported. |
-| `java.util.Scanner`, I/O basics | Full | Bridged to async worker stdin queue. |
-| `java.util.List`, `ArrayList`, `Map` | Full | Standard collection interfaces and generics supported. |
-| Exception handling & stack traces | Full | Line mapping preserves original source location. |
-| AWT / Swing desktop GUIs | Non-goal | Excluded per Section 1 explicit non-goals. |
-| Arbitrary Reflection & Dynamic Classloading | Constrained | JVM sandbox limits dynamic bytecode emission. |
+| **1. Actual Browser Execution** | Compile fresh user-authored `.java` code to bytecode and execute in-browser using real WASM/JS artifacts with network inspection confirming zero remote compilation/execution calls. | 100% Client-side |
+| **2. True Interactive Stdin** | Request multiple sequential inputs via `Scanner.nextLine()`, including blank lines, delayed responses (>5s pause), and EOF handling without freezing worker message dispatch. | Full interactive input |
+| **3. Runtime Compatibility** | Verify Java collections (`ArrayList`, `HashMap`), custom classes across packages, recursive calls, exception stack traces, and local `var`. | Pass spec fixture matrix |
+| **4. Reliability & Stress** | Run 100 consecutive compile/run cycles, deliberate compile failures, user cancellations (`stop()`), and project reloads; measure memory to ensure no unbounded leaks. | Zero worker leaks |
+| **5. Redistribution & Licenses** | Complete audit of compiler assets, JVM WASM binaries, JDK class library licenses (EPL-2.0 / MIT / Apache-2.0 / GPL Classpath Exception compliance), and third-party notices. | Fully compliant OSS |
 
 ---
 
-## 4. Verdict & Milestone Exit Decision
+## 5. Architectural Strategy & Convergence
 
-- **Gate Status**: **PASS for Milestone 0 / POC-C under OSS Track**.
-- **Production Status**: In accordance with Section 2.1 & 21.3, Java is cataloged with an explicit truthful status during development (**Experimental OSS Track**), guaranteeing that no proprietary runtime (CheerpJ) or remote execution backend will be substituted. Full milestone sign-off for M4 will build upon this validated test harness.
+- **Maintain Strict LanguageRuntime Interface**: Both Track A and Track B adhere to `@ide/execution-contracts`.
+- **Single-Engine Adoption**: As soon as either **ECJ + BJVM** or **199xVM** passes the 5 POC-C2 gates, we will immediately converge on that candidate for `@ide/runner-java` rather than maintaining redundant parallel JVM engines.
+- **Production Integration Priorities**:
+  1. Map compiler diagnostic line/column offsets directly into CodeMirror lint markers.
+  2. Stream stdout and stderr into the unified IDE terminal.
+  3. Manage worker lifecycle, cooperative interrupt, and fallback `worker.terminate()`.
+  4. Virtual filesystem mount for multi-file package layouts (`src/demo/Main.java`).
+  5. Cache immutable compiler and JVM WASM artifacts via Service Worker for offline execution.
