@@ -35,8 +35,8 @@ describe('AutoSaveManager (IDE-006)', () => {
     autoSave.scheduleSave(sampleProject);
     expect(statuses).toContain('saving');
 
-    // Wait for debounce timer to fire
-    await new Promise((r) => setTimeout(r, 80));
+    // Wait for debounce timer (50ms) plus IndexedDB async transaction
+    await new Promise((r) => setTimeout(r, 200));
 
     expect(statuses).toContain('saved');
     expect(autoSave.getRevision()).toBe(1);
