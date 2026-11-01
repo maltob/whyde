@@ -1,0 +1,21 @@
+{
+  "name": "@ide/sharing",
+  "version": "0.1.0",
+  "description": "Compressed URL snapshot serialization, base64url encoding, and size budgeting (Milestone 5)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide/project-model": "workspace:*",
+    "pako": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/pako": "^2.0.3",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
