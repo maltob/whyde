@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LtiGateway")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4efd1c580d4e475cedd8f60c02c03cfa8d57b766")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9f099a5974a444a3807a426b4b0009dce19b4b2d")]
 [assembly: System.Reflection.AssemblyProductAttribute("LtiGateway")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LtiGateway")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
