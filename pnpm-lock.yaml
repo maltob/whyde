@@ -85,6 +85,22 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9
 
+  packages/runner-python:
+    dependencies:
+      '@ide/execution-contracts':
+        specifier: workspace:*
+        version: link:../execution-contracts
+      '@ide/project-model':
+        specifier: workspace:*
+        version: link:../project-model
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9
+
   packages/storage-browser:
     dependencies:
       '@ide/project-model':

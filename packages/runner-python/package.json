@@ -1,0 +1,20 @@
+{
+  "name": "@ide/runner-python",
+  "version": "0.1.0",
+  "description": "Production Python 3.14 runner adapter using Pyodide and Web Worker isolation",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide/execution-contracts": "workspace:*",
+    "@ide/project-model": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
