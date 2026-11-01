@@ -1,0 +1,21 @@
+{
+  "name": "@ide/assignments",
+  "version": "0.1.0",
+  "description": "Instructor assignment package model, schema validation, test evaluation, and grading reports (Milestone 6)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide/execution-contracts": "workspace:*",
+    "@ide/project-model": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

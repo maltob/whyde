@@ -54,6 +54,25 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9
 
+  packages/assignments:
+    dependencies:
+      '@ide/execution-contracts':
+        specifier: workspace:*
+        version: link:../execution-contracts
+      '@ide/project-model':
+        specifier: workspace:*
+        version: link:../project-model
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9
+
   packages/execution-contracts:
     devDependencies:
       typescript:
