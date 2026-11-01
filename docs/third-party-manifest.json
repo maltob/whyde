@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "browser-ide-third-party-manifest",
+  "version": "1.1.0",
+  "generatedAt": "2026-11-01T15:26:00Z",
+  "policy": {
+    "rejectProprietaryRuntimes": true,
+    "cheerpjExcluded": true,
+    "permissiveCoreTarget": "Apache-2.0"
+  },
+  "dependencies": [
+    {
+      "name": "pyodide",
+      "version": "314.0.7",
+      "license": "MPL-2.0",
+      "purpose": "In-browser Python 3.14 WebAssembly runtime",
+      "repository": "https://github.com/pyodide/pyodide",
+      "status": "approved-oss",
+      "noticeRequired": true
+    },
+    {
+      "name": "yowasp-clang",
+      "version": "18.1.8",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "purpose": "In-browser C++17+ Clang frontend and LLD linker in WebAssembly",
+      "repository": "https://github.com/YoWASP/clang",
+      "status": "approved-oss",
+      "noticeRequired": true
+    },
+    {
+      "name": "eclipse-ecj",
+      "version": "3.38.0",
+      "license": "EPL-2.0",
+      "purpose": "Java 11+ source compiler (Track A candidate)",
+      "repository": "https://github.com/eclipse-jdt/eclipse.jdt.core",
+      "status": "investigation-oss",
+      "noticeRequired": true
+    },
+    {
+      "name": "bjvm",
+      "version": "0.1.0",
+      "license": "MIT",
+      "purpose": "Rust/WASM Java Virtual Machine (Track A candidate)",
+      "repository": "https://github.com/itsu-dev/BJVM",
+      "status": "investigation-oss",
+      "noticeRequired": true
+    },
+    {
+      "name": "199xvm",
+      "version": "0.1.0",
+      "license": "MIT",
+      "purpose": "TypeScript compiler + WASM interpreter for Java (Track B candidate)",
+      "repository": "https://github.com/kawasima/199xVM",
+      "status": "investigation-oss",
+      "noticeRequired": true
+    },
+    {
+      "name": "cheerpj",
+      "version": "3.x",
+      "license": "Proprietary",
+      "purpose": "Excluded",
+      "repository": "https://cheerpj.com",
+      "status": "REJECTED_COMMERCIAL_TERMS",
+      "noticeRequired": false
+    }
+  ]
+}

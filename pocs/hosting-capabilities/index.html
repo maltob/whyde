@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POC-A: Hosting Capabilities & Baseline Matrix</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.5; padding: 2rem; max-width: 800px; margin: 0 auto; }
+    h1 { color: #1e293b; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #cbd5e1; padding: 0.75rem; text-align: left; }
+    th { background: #f1f5f9; }
+    .pass { color: #16a34a; font-weight: bold; }
+    .note { color: #d97706; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>POC-A: Browser & Hosting Capabilities Probe</h1>
+  <p>Static check verifying essential browser capabilities for zero-backend IDE execution.</p>
+
+  <table id="results-table">
+    <thead>
+      <tr>
+        <th>Capability</th>
+        <th>Status</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody id="results-body">
+      <tr><td colspan="3">Probing browser capabilities...</td></tr>
+    </tbody>
+  </table>
+
+  <script type="module" src="./probe.js"></script>
+</body>
+</html>
