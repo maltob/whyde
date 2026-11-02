@@ -1,3 +1,5 @@
+import { executeJavaProgram } from './javaEngine.js';
+
 export interface InterpretedExecutionResult {
   stdout: string;
   stderr: string;
@@ -15,7 +17,7 @@ export function executeClientSideCode(
     if (language === 'python') {
       return runPython(code, suppliedInput, allFiles);
     } else if (language === 'java') {
-      return runJava(code, suppliedInput, allFiles);
+      return executeJavaProgram(code, suppliedInput, allFiles);
     } else {
       return runCpp(code, suppliedInput, allFiles);
     }

@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@ide/execution-contracts": "workspace:*",
-    "@ide/project-model": "workspace:*"
+    "@ide/project-model": "workspace:*",
+    "pyodide": "314.0.7"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
