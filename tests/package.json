@@ -1,0 +1,21 @@
+{
+  "name": "@tests/e2e-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide/assignments": "workspace:*",
+    "@ide/execution-contracts": "workspace:*",
+    "@ide/project-model": "workspace:*",
+    "@ide/runner-cpp": "workspace:*",
+    "@ide/runner-python": "workspace:*",
+    "@pocs/java-oss": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

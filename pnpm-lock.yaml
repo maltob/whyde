@@ -192,6 +192,34 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9
 
+  tests:
+    dependencies:
+      '@ide/assignments':
+        specifier: workspace:*
+        version: link:../packages/assignments
+      '@ide/execution-contracts':
+        specifier: workspace:*
+        version: link:../packages/execution-contracts
+      '@ide/project-model':
+        specifier: workspace:*
+        version: link:../packages/project-model
+      '@ide/runner-cpp':
+        specifier: workspace:*
+        version: link:../packages/runner-cpp
+      '@ide/runner-python':
+        specifier: workspace:*
+        version: link:../packages/runner-python
+      '@pocs/java-oss':
+        specifier: workspace:*
+        version: link:../pocs/java-oss
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9
+
 packages:
 
   '@babel/code-frame@7.29.7':
