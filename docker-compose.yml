@@ -1,0 +1,53 @@
+services:
+  # 1. Primary Static Web IDE (Client-side execution, zero backend needed)
+  browser-ide-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: browser-ide-web
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - ide-network
+
+  # 2. Optional Canvas LTI 1.3 Gateway Service
+  lti-gateway:
+    build:
+      context: ./optional-services/lti-gateway
+      dockerfile: Dockerfile
+    container_name: browser-ide-lti-gateway
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - LtiSecurity__AllowedIssuers__0=https://canvas.instructure.com
+      - LtiSecurity__AllowedOrigins__0=http://localhost:8080
+      - LtiSecurity__ClientId=10000000000001
+      - LtiSecurity__RequireTrustedGrading=true
+    restart: unless-stopped
+    networks:
+      - ide-network
+    depends_on:
+      - browser-ide-web
+
+  # 3. Optional Isolated Trusted Grading Microservice
+  trusted-grader:
+    build:
+      context: ./optional-services/trusted-grader
+      dockerfile: Dockerfile
+    container_name: browser-ide-trusted-grader
+    ports:
+      - "5002:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - GraderSecurity__GatewayApiKey=sec_grader_shared_key_2026_test
+      - GraderSecurity__MaxExecutionTimeSeconds=10
+      - GraderSecurity__MaxMemoryMb=256
+    restart: unless-stopped
+    networks:
+      - ide-network
+
+networks:
+  ide-network:
+    driver: bridge
