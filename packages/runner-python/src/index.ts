@@ -5,6 +5,9 @@ import {
   RuntimeProbeResult,
   LanguageId,
 } from '@ide/execution-contracts';
+import { executePythonInPyodide } from './pyodideRunner.js';
+
+export * from './pyodideRunner.js';
 
 export type WorkerToMainMessage =
   | { type: 'stdout'; text: string }
@@ -44,6 +47,42 @@ export interface PythonWorkerBridge {
   onerror: ((error: any) => void) | null;
 }
 
+class DirectPyodideWorkerBridge implements PythonWorkerBridge {
+  onmessage: ((event: { data: WorkerToMainMessage }) => void) | null = null;
+  onerror: ((error: any) => void) | null = null;
+  private terminated = false;
+
+  postMessage(msg: MainToWorkerMessage) {
+    if (this.terminated) return;
+    if (msg.type === 'run') {
+      executePythonInPyodide(msg.request.project, {
+        onStdout: (text) => {
+          if (!this.terminated) this.onmessage?.({ data: { type: 'stdout', text } });
+        },
+        onStderr: (text) => {
+          if (!this.terminated) this.onmessage?.({ data: { type: 'stderr', text } });
+        },
+        onEvent: (event) => {
+          if (this.terminated) return;
+          if (
+            event.type === 'complete' ||
+            event.type === 'diagnostic' ||
+            event.type === 'stdin-request'
+          ) {
+            this.onmessage?.({ data: event as WorkerToMainMessage });
+          }
+        },
+      }).catch((err) => {
+        if (!this.terminated) this.onerror?.(err);
+      });
+    }
+  }
+
+  terminate() {
+    this.terminated = true;
+  }
+}
+
 export class PythonRuntimeProvider implements RuntimeProvider {
   readonly id = 'python-pyodide';
   readonly language: LanguageId = 'python';
@@ -62,7 +101,8 @@ export class PythonRuntimeProvider implements RuntimeProvider {
             type: 'module',
           }) as unknown as PythonWorkerBridge;
         }
-        throw new Error('Web Workers not available in this environment');
+        // In Node / non-Worker environments, use direct in-process Pyodide execution
+        return new DirectPyodideWorkerBridge();
       });
   }
 

@@ -100,8 +100,19 @@ export function executeJavaProgram(
       }
     }
 
-    // Print statements: System.out.println / System.out.print
-    const printMatch = rawLine.match(/System\.out\.print(?:ln)?\s*\(([\s\S]*)\)\s*;?/);
+    // forEach or for loops
+    if (rawLine.includes('.forEach') && rawLine.includes('println')) {
+      const listName = rawLine.split('.')[0].trim();
+      if (scope[listName] && Array.isArray(scope[listName])) {
+        for (const item of scope[listName]) {
+          stdout += `${item}\n`;
+        }
+      }
+      continue;
+    }
+
+    // Print statements: System.out.println / System.out.print (check only if not inside a lambda or forEach)
+    const printMatch = rawLine.match(/^System\.out\.print(?:ln)?\s*\(([\s\S]*)\)\s*;?$/);
     if (printMatch) {
       const expr = printMatch[1].trim();
       let text = evalJavaPrintExpr(expr, scope, suppliedInput);
@@ -126,17 +137,6 @@ export function executeJavaProgram(
       const val = addMatch[2].trim().replace(/^["']|["']$/g, '');
       if (scope[listName] && Array.isArray(scope[listName])) {
         scope[listName].push(isNaN(Number(val)) ? val : Number(val));
-      }
-      continue;
-    }
-
-    // forEach or for loops
-    if (rawLine.includes('.forEach') && rawLine.includes('println')) {
-      const listName = rawLine.split('.')[0].trim();
-      if (scope[listName] && Array.isArray(scope[listName])) {
-        for (const item of scope[listName]) {
-          stdout += `${item}\n`;
-        }
       }
       continue;
     }

@@ -59,7 +59,7 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{
 
   // Collect compilation source files
   const cppFiles = Object.keys(files).filter((f) => f.endsWith('.cpp') || f.endsWith('.cc') || f.endsWith('.c'));
-  const clangArgs = [`-std=${standard}`, '-O2', ...cppFiles, '-o', 'out.wasm'];
+  const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...cppFiles, '-o', 'out.wasm'];
 
   let compileStderr = '';
   let compileStdout = '';

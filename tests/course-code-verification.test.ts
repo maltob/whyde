@@ -105,6 +105,65 @@ if __name__ == "__main__":
   });
 
   // -------------------------------------------------------------
+  // 1b. CPYTHON STANDARD LIBRARY: unittest.suite execution in Pyodide
+  // Source: python/cpython Lib/unittest/suite.py
+  // -------------------------------------------------------------
+  it('verifies CPython unittest.suite test runner execution in Pyodide engine', async () => {
+    const { executePythonInPyodide } = await import('@ide/runner-python');
+
+    const cpythonTestCode = `
+import unittest
+import unittest.suite
+import io
+
+class CPythonTestSuiteValidation(unittest.TestCase):
+    def test_addition(self):
+        self.assertEqual(10 + 20, 30)
+
+    def test_cpython_suite_instances(self):
+        suite = unittest.suite.TestSuite()
+        self.assertIsInstance(suite, unittest.suite.BaseTestSuite)
+        self.assertEqual(suite.countTestCases(), 0)
+
+    def test_suite_iteration(self):
+        suite = unittest.suite.TestSuite()
+        t1 = CPythonTestSuiteValidation('test_addition')
+        suite.addTest(t1)
+        tests = list(suite)
+        self.assertEqual(len(tests), 1)
+
+suite = unittest.TestSuite()
+suite.addTest(CPythonTestSuiteValidation('test_addition'))
+suite.addTest(CPythonTestSuiteValidation('test_cpython_suite_instances'))
+suite.addTest(CPythonTestSuiteValidation('test_suite_iteration'))
+
+stream = io.StringIO()
+runner = unittest.TextTestRunner(stream=stream, verbosity=2)
+result = runner.run(suite)
+
+print(f"CPython unittest.suite verification: ran={result.testsRun}, errors={len(result.errors)}, failures={len(result.failures)}")
+`;
+
+    const project: Project = {
+      schemaVersion: 1,
+      kind: 'browser-ide-project',
+      id: 'cpython-suite-verification',
+      name: 'CPython Suite Verification',
+      language: 'python',
+      entrypoint: 'suite_test.py',
+      files: [{ path: 'suite_test.py', encoding: 'utf-8', content: cpythonTestCode }],
+      toolchain: { runtimeId: 'python-pyodide', requestedVersion: '314.0.7' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await executePythonInPyodide(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+    expect(res.stdout).toContain('CPython unittest.suite verification: ran=3, errors=0, failures=0');
+  }, 30000);
+
+  // -------------------------------------------------------------
   // 2. PRINCETON COS 126: Java Standard Input & Scanner
   // Source: introcs.cs.princeton.edu (Sedgewick & Wayne)
   // -------------------------------------------------------------

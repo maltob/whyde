@@ -228,4 +228,54 @@ describe('PythonRuntimeProvider (Milestone 2 - IDE-009)', () => {
 
     expect(mockWorker.terminated).toBe(true);
   });
+
+  it('runs real CPython test suite code using unittest.suite in Pyodide', async () => {
+    const { executePythonInPyodide } = await import('./pyodideRunner.js');
+
+    const cpythonSuiteProject: Project = {
+      schemaVersion: 1,
+      id: 'cpython-unittest-suite',
+      name: 'CPython Unittest Suite',
+      language: 'python',
+      entrypoint: 'test_suite_runner.py',
+      files: [
+        {
+          path: 'test_suite_runner.py',
+          encoding: 'utf-8',
+          content: `
+import unittest
+import unittest.suite
+import io
+
+class SampleTestCase(unittest.TestCase):
+    def test_success(self):
+        self.assertEqual(2 * 3, 6)
+
+    def test_suite_type(self):
+        suite = unittest.suite.TestSuite()
+        self.assertIsInstance(suite, unittest.suite.BaseTestSuite)
+        self.assertEqual(suite.countTestCases(), 0)
+
+suite = unittest.TestSuite()
+suite.addTest(SampleTestCase('test_success'))
+suite.addTest(SampleTestCase('test_suite_type'))
+
+stream = io.StringIO()
+runner = unittest.TextTestRunner(stream=stream, verbosity=2)
+result = runner.run(suite)
+
+print(f"CPython unittest results: ran={result.testsRun}, errors={len(result.errors)}, failures={len(result.failures)}")
+`,
+        },
+      ],
+      toolchain: { runtimeId: 'python-pyodide', requestedVersion: '314.0.7' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await executePythonInPyodide(cpythonSuiteProject);
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+    expect(res.stdout).toContain('CPython unittest results: ran=2, errors=0, failures=0');
+  }, 30000);
 });

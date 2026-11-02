@@ -13,6 +13,7 @@
     "@ide/execution-contracts": "workspace:*",
     "@ide/integration-contracts": "workspace:*",
     "@ide/project-model": "workspace:*",
+    "@ide/runner-python": "workspace:*",
     "@ide/storage-browser": "workspace:*",
     "java-parser": "^3.0.1",
     "lucide-react": "^0.453.0",
