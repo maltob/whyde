@@ -7,6 +7,7 @@ import { FileTree } from './FileTree.js';
 import { Editor } from './Editor.js';
 import { Terminal } from './Terminal.js';
 import { STARTER_PROJECTS } from './templates.js';
+import { executeClientSideCode } from './clientExecutor.js';
 
 const repo = new IndexedDbProjectRepository();
 
@@ -102,43 +103,54 @@ export const App: React.FC = () => {
     setIsRunning(true);
     setLogs((prev) => [
       ...prev,
-      { type: 'info', text: `[Browser IDE] Preparing ${project.language} execution environment...\n` },
+      { type: 'info', text: `[Browser IDE] Compiling and running ${project.language} (${activeFile.path})...\n` },
     ]);
 
-    // Sample execution flow demonstration
     setTimeout(() => {
-      setLogs((prev) => [
-        ...prev,
-        { type: 'stdout', text: `Executing ${project.name} (${project.entrypoint})...\n` },
-      ]);
+      const result = executeClientSideCode(project.language, activeFile.content);
 
-      if (project.language === 'python') {
-        setLogs((prev) => [
-          ...prev,
-          { type: 'stdout', text: `Hello from Python 3.14.2!\n` },
-        ]);
-        setPendingStdin({ requestId: 'req-1', prompt: 'What is your name? ' });
-      } else if (project.language === 'java') {
-        setLogs((prev) => [
-          ...prev,
-          { type: 'stdout', text: `Hello from Java 11+!\n` },
-        ]);
-        setPendingStdin({ requestId: 'req-2', prompt: 'Enter your name: ' });
+      if (result.stderr) {
+        setLogs((prev) => [...prev, { type: 'stderr', text: result.stderr }]);
+        setIsRunning(false);
+        return;
+      }
+
+      if (result.stdout) {
+        setLogs((prev) => [...prev, { type: 'stdout', text: result.stdout }]);
+      }
+
+      if (result.requiresStdin) {
+        setPendingStdin({
+          requestId: result.requiresStdin.requestId,
+          prompt: result.requiresStdin.prompt,
+        });
       } else {
         setLogs((prev) => [
           ...prev,
-          { type: 'stdout', text: `Hello from C++17+!\n` },
+          { type: 'info', text: `[Browser IDE] Program completed with exit code ${result.exitCode}.\n` },
         ]);
-        setPendingStdin({ requestId: 'req-3', prompt: 'Enter your favorite programming language: ' });
+        setIsRunning(false);
       }
-    }, 400);
+    }, 200);
   };
 
   const handleSupplyStdin = (requestId: string, input: string) => {
     setLogs((prev) => [
       ...prev,
       { type: 'stdout', text: `${input}\n` },
-      { type: 'stdout', text: `Program completed with exit code 0.\n` },
+    ]);
+
+    // Resume execution with the supplied input
+    const result = executeClientSideCode(project.language, activeFile.content, input);
+    if (result.stdout) {
+      setLogs((prev) => [...prev, { type: 'stdout', text: result.stdout }]);
+    }
+    if (result.stderr) {
+      setLogs((prev) => [...prev, { type: 'stderr', text: result.stderr }]);
+    }
+    setLogs((prev) => [
+      ...prev,
+      { type: 'info', text: `[Browser IDE] Program completed with exit code ${result.exitCode}.\n` },
     ]);
     setPendingStdin(null);
     setIsRunning(false);
