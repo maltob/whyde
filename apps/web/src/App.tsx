@@ -107,7 +107,12 @@ export const App: React.FC = () => {
     ]);
 
     setTimeout(() => {
-      const result = executeClientSideCode(project.language, activeFile.content);
+      const result = executeClientSideCode(
+        project.language,
+        activeFile.content,
+        undefined,
+        project.files
+      );
 
       if (result.stderr) {
         setLogs((prev) => [...prev, { type: 'stderr', text: result.stderr }]);
@@ -141,7 +146,12 @@ export const App: React.FC = () => {
     ]);
 
     // Resume execution with the supplied input
-    const result = executeClientSideCode(project.language, activeFile.content, input);
+    const result = executeClientSideCode(
+      project.language,
+      activeFile.content,
+      input,
+      project.files
+    );
     if (result.stdout) {
       setLogs((prev) => [...prev, { type: 'stdout', text: result.stdout }]);
     }
