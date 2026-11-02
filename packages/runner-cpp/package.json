@@ -10,8 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.4.2",
     "@ide/execution-contracts": "workspace:*",
-    "@ide/project-model": "workspace:*"
+    "@ide/project-model": "workspace:*",
+    "@yowasp/clang": "22.0.0-git20542-10"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

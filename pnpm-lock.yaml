@@ -19,6 +19,9 @@ importers:
       '@ide/project-model':
         specifier: workspace:*
         version: link:../../packages/project-model
+      '@ide/runner-cpp':
+        specifier: workspace:^
+        version: link:../../packages/runner-cpp
       '@ide/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser
@@ -106,12 +109,18 @@ importers:
 
   packages/runner-cpp:
     dependencies:
+      '@bjorn3/browser_wasi_shim':
+        specifier: ^0.4.2
+        version: 0.4.2
       '@ide/execution-contracts':
         specifier: workspace:*
         version: link:../execution-contracts
       '@ide/project-model':
         specifier: workspace:*
         version: link:../project-model
+      '@yowasp/clang':
+        specifier: 22.0.0-git20542-10
+        version: 22.0.0-git20542-10
     devDependencies:
       typescript:
         specifier: ^5.7.0
@@ -304,6 +313,9 @@ packages:
   '@babel/types@7.29.11':
     resolution: {integrity: sha512-WCsemW40Cpc6gouC1SrY6PBaZ+oLRlEVY9XBvZBI7il/HyUrb2nJ505wE1MHEFyDZNnrWDEuy4jL50WVHfTTSQ==}
     engines: {node: '>=6.9.0'}
+
+  '@bjorn3/browser_wasi_shim@0.4.2':
+    resolution: {integrity: sha512-/iHkCVUG3VbcbmEHn5iIUpIrh7a7WPiwZ3sHy4HZKZzBdSadwdddYDZAII2zBvQYV0Lfi8naZngPCN7WPHI/hA==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -661,6 +673,9 @@ packages:
 
   '@vitest/utils@2.1.9':
     resolution: {integrity: sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ==}
+
+  '@yowasp/clang@22.0.0-git20542-10':
+    resolution: {integrity: sha512-V31/z9GrJECKeACTDUyvg2llbEUiFi3bxtL5HSg7H/6sydSxdI/AoVAD9F5ozrfLjotWl0B9rghR87m+DUM/zg==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1061,6 +1076,8 @@ snapshots:
       '@babel/helper-string-parser': 7.29.11
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@bjorn3/browser_wasi_shim@0.4.2': {}
+
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
 
@@ -1319,6 +1336,8 @@ snapshots:
       '@vitest/pretty-format': 2.1.9
       loupe: 3.2.1
       tinyrainbow: 1.2.0
+
+  '@yowasp/clang@22.0.0-git20542-10': {}
 
   assertion-error@2.0.1: {}
 

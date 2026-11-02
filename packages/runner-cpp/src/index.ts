@@ -178,3 +178,6 @@ export class CppRuntimeProvider implements RuntimeProvider {
     this.currentRunId = null;
   }
 }
+
+export * from './manifest.js';
+export * from './compiler.js';
