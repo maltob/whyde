@@ -11,9 +11,6 @@ export function executeClientSideCode(
   suppliedInput?: string,
   allFiles: { path: string; content: string }[] = []
 ): InterpretedExecutionResult {
-  let stdout = '';
-  let stderr = '';
-
   try {
     if (language === 'python') {
       return runPython(code, suppliedInput);
@@ -24,13 +21,17 @@ export function executeClientSideCode(
     }
   } catch (err: any) {
     return {
-      stdout,
+      stdout: '',
       stderr: `Runtime Error: ${err?.message || err}\n`,
       exitCode: 1,
     };
   }
 }
 
+/**
+ * Sequential line-by-line interpreter for C++ source code.
+ * Respects statement order, function calls, cout <<, and cin >>.
+ */
 function runCpp(
   code: string,
   suppliedInput?: string,
@@ -39,66 +40,144 @@ function runCpp(
   let stdout = '';
   let stderr = '';
 
-  // 1. If code requires input and input has NOT yet been supplied:
-  // Output everything up to the cin prompt, then request stdin
-  if (code.includes('std::cin') && suppliedInput === undefined) {
-    // Collect output before cin
-    if (code.includes('Hello from C++17!')) {
-      stdout += 'Hello from C++17!\n';
+  // Extract functions from other project files (e.g. helper.cpp)
+  const functions: Record<string, () => string> = {};
+  for (const file of allFiles) {
+    if (file.path.endsWith('.cpp')) {
+      const funcMatch = file.content.match(/void\s+([A-Za-z0-9_]+)\s*\(\)\s*\{([\s\S]*?)\}/);
+      if (funcMatch) {
+        const fname = funcMatch[1];
+        const body = funcMatch[2];
+        functions[fname] = () => {
+          let out = '';
+          const coutMatches = body.matchAll(/std::cout\s*<<\s*"([^"]+)"/g);
+          for (const cm of coutMatches) {
+            out += cm[1] + '\n';
+          }
+          return out;
+        };
+      }
+    }
+  }
+
+  // Extract main() body
+  const mainMatch = code.match(/int\s+main\s*\([^)]*\)\s*\{([\s\S]*)\}/);
+  if (!mainMatch) {
+    return { stdout: '', stderr: 'Error: main() function not found\n', exitCode: 1 };
+  }
+
+  const mainBody = mainMatch[1];
+  const statements = mainBody
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !s.startsWith('//'));
+
+  let variables: Record<string, string> = {};
+  if (suppliedInput !== undefined) {
+    variables['lang'] = suppliedInput;
+  }
+
+  let waitingForStdin: { requestId: string; prompt: string } | null = null;
+
+  for (let i = 0; i < statements.length; i++) {
+    const stmt = statements[i];
+
+    // Check if statement is a function call like greet()
+    const callMatch = stmt.match(/^([A-Za-z0-9_]+)\s*\(\s*\)$/);
+    if (callMatch && functions[callMatch[1]]) {
+      stdout += functions[callMatch[1]]();
+      continue;
     }
 
-    let prompt = 'Enter input: ';
-    const promptMatch = code.match(/std::cout\s*<<\s*"([^"]+)"/g);
-    if (promptMatch && promptMatch.length > 1) {
-      // The second cout in the template is the prompt
-      const m = promptMatch[1].match(/"([^"]+)"/);
-      if (m) prompt = m[1];
-    } else if (promptMatch && promptMatch.length === 1) {
-      const m = promptMatch[0].match(/"([^"]+)"/);
-      if (m) prompt = m[1];
+    // Check for std::cin >> var
+    if (stmt.includes('std::cin >>')) {
+      const cinMatch = stmt.match(/std::cin\s*>>\s*([A-Za-z0-9_]+)/);
+      if (cinMatch) {
+        const varName = cinMatch[1];
+        if (suppliedInput === undefined) {
+          // Pause execution and return prompt
+          waitingForStdin = {
+            requestId: `cin-${Date.now()}`,
+            prompt: 'Input > ',
+          };
+          break; // Stop executing further statements until input is provided
+        } else {
+          variables[varName] = suppliedInput;
+          continue;
+        }
+      }
     }
 
+    // Check for if (std::cin >> var) { ... }
+    if (stmt.startsWith('if') && stmt.includes('std::cin >>')) {
+      const cinMatch = stmt.match(/std::cin\s*>>\s*([A-Za-z0-9_]+)/);
+      const varName = cinMatch ? cinMatch[1] : 'lang';
+
+      if (suppliedInput === undefined) {
+        waitingForStdin = {
+          requestId: `cin-${Date.now()}`,
+          prompt: 'Input > ',
+        };
+        break; // Pause
+      } else {
+        variables[varName] = suppliedInput;
+        // Evaluate inner block of the if statement
+        const innerCout = stmt.match(/std::cout\s*<<\s*([\s\S]*)/);
+        if (innerCout) {
+          stdout += evaluateCoutChain(innerCout[1], variables);
+        }
+        continue;
+      }
+    }
+
+    // Check for std::cout << ...
+    if (stmt.startsWith('std::cout')) {
+      const expr = stmt.replace(/^std::cout\s*<<\s*/, '');
+      stdout += evaluateCoutChain(expr, variables);
+      continue;
+    }
+
+    // Check return 0
+    if (stmt.startsWith('return')) {
+      break;
+    }
+  }
+
+  if (waitingForStdin) {
     return {
       stdout,
       stderr: '',
       exitCode: 0,
-      requiresStdin: { requestId: `cpp-stdin-${Date.now()}`, prompt },
+      requiresStdin: waitingForStdin,
     };
   }
 
-  // 2. If input HAS been supplied or no cin needed, complete execution:
-  if (suppliedInput !== undefined) {
-    // Format response using supplied input
-    stdout += `Awesome! ${suppliedInput} is great.\n`;
-  } else {
-    // If running without cin, output any standard cout
-    const coutRegex = /std::cout\s*<<\s*"([^"]+)"(?:\s*<<\s*std::endl)?;/g;
-    let m;
-    while ((m = coutRegex.exec(code)) !== null) {
-      stdout += `${m[1]}\n`;
-    }
-  }
-
-  // Check multi-file calls: e.g. greet() from helper.cpp
-  if (code.includes('greet()')) {
-    const helperFile = allFiles.find((f) => f.path.includes('helper.cpp'));
-    if (helperFile && helperFile.content.includes('Greetings from helper')) {
-      stdout += 'Greetings from helper translation unit!\n';
-    } else {
-      stdout += 'Greetings from helper translation unit!\n';
-    }
-  }
-
-  // Course example: stats
-  if (code.includes('calculateAverage') || code.includes('scores')) {
-    stdout += 'Stanford CS106B Average: 92.5\n';
-  }
-
   return {
-    stdout: stdout || 'C++ execution complete.\n',
+    stdout: stdout || 'Program finished with no output.\n',
     stderr,
     exitCode: 0,
   };
+}
+
+function evaluateCoutChain(chain: string, vars: Record<string, string>): string {
+  let result = '';
+  const parts = chain.split('<<').map((p) => p.trim());
+
+  for (const part of parts) {
+    if (part === 'std::endl') {
+      result += '\n';
+    } else if (part.startsWith('"') && part.endsWith('"')) {
+      result += part.slice(1, -1);
+    } else if (vars[part] !== undefined) {
+      result += vars[part];
+    }
+  }
+
+  if (!chain.includes('std::endl') && result.length > 0 && !result.endsWith('\n')) {
+    // If no explicit endl, preserve raw string (could be a prompt without newline)
+  }
+
+  return result;
 }
 
 function runJava(
@@ -109,7 +188,6 @@ function runJava(
   let stdout = '';
   let stderr = '';
 
-  // 1. Basic syntax checks
   const lines = code.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
@@ -135,7 +213,6 @@ function runJava(
     }
   }
 
-  // 2. Scanner input handling
   if (code.includes('Scanner') && code.includes('System.in')) {
     if (suppliedInput === undefined) {
       let prompt = 'Enter input: ';
@@ -152,7 +229,6 @@ function runJava(
     }
   }
 
-  // 3. Emulate ArrayList and loops
   if (code.includes('ArrayList')) {
     const list: any[] = [];
     const addRegex = /\.add\(([^)]+)\);/g;
@@ -171,7 +247,6 @@ function runJava(
     }
   }
 
-  // 4. System.out.println
   const printRegex = /System\.out\.println\(([^)]+)\);/g;
   let printMatch;
   while ((printMatch = printRegex.exec(code)) !== null) {
