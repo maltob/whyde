@@ -12,6 +12,8 @@ import { formatCode } from './formatter.js';
 interface EditorProps {
   filePath: string;
   content: string;
+  syntaxColoring?: boolean;
+  onToggleSyntaxColoring?: (enabled: boolean) => void;
   onChange: (newContent: string) => void;
 }
 
@@ -34,11 +36,29 @@ function getLanguage(filePath: string): string {
   }
 }
 
-export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) => {
-  const [syntaxColoring, setSyntaxColoring] = useState<boolean>(true);
+export const Editor: React.FC<EditorProps> = ({
+  filePath,
+  content,
+  syntaxColoring = true,
+  onToggleSyntaxColoring,
+  onChange,
+}) => {
+  const [internalSyntaxColoring, setInternalSyntaxColoring] = useState<boolean>(syntaxColoring);
   const [formattedFeedback, setFormattedFeedback] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
+
+  // Sync internal state with external prop if changed
+  useEffect(() => {
+    setInternalSyntaxColoring(syntaxColoring);
+  }, [syntaxColoring]);
+
+  const activeColoring = onToggleSyntaxColoring ? syntaxColoring : internalSyntaxColoring;
+  const toggleColoring = () => {
+    const next = !activeColoring;
+    setInternalSyntaxColoring(next);
+    onToggleSyntaxColoring?.(next);
+  };
 
   const lang = getLanguage(filePath);
 
@@ -132,7 +152,7 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
   };
 
   const highlightedHtml = React.useMemo(() => {
-    if (!syntaxColoring || lang === 'plaintext') {
+    if (!activeColoring || lang === 'plaintext') {
       return '';
     }
     const grammar = Prism.languages[lang];
@@ -142,7 +162,7 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
     } catch {
       return '';
     }
-  }, [content, lang, syntaxColoring]);
+  }, [content, lang, activeColoring]);
 
   return (
     <main
@@ -184,11 +204,11 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             title="Toggle Syntax Highlighting"
-            onClick={() => setSyntaxColoring(!syntaxColoring)}
+            onClick={toggleColoring}
             style={{
-              background: syntaxColoring ? '#1e293b' : 'transparent',
+              background: activeColoring ? '#1e293b' : 'transparent',
               border: '1px solid #334155',
-              color: syntaxColoring ? '#38bdf8' : '#64748b',
+              color: activeColoring ? '#38bdf8' : '#64748b',
               cursor: 'pointer',
               padding: '4px 8px',
               borderRadius: '4px',
@@ -199,7 +219,7 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
             }}
           >
             <Palette size={13} />
-            <span>Highlighting: {syntaxColoring ? 'ON' : 'OFF'}</span>
+            <span>Highlighting: {activeColoring ? 'ON' : 'OFF'}</span>
           </button>
 
           <button
@@ -234,7 +254,7 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
         }}
       >
         {/* Syntax Highlighting Underlay */}
-        {syntaxColoring && lang !== 'plaintext' && (
+        {activeColoring && lang !== 'plaintext' && (
           <pre
             ref={preRef}
             aria-hidden="true"
@@ -274,8 +294,8 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: syntaxColoring && lang !== 'plaintext' ? 'transparent' : '#090d16',
-            color: syntaxColoring && lang !== 'plaintext' ? 'transparent' : '#f8fafc',
+            backgroundColor: activeColoring && lang !== 'plaintext' ? 'transparent' : '#090d16',
+            color: activeColoring && lang !== 'plaintext' ? 'transparent' : '#f8fafc',
             caretColor: '#38bdf8',
             border: 'none',
             padding: '16px',

@@ -8,12 +8,24 @@ import { Editor } from './Editor.js';
 import { XtermTerminal } from './XtermTerminal.js';
 import { STARTER_PROJECTS } from './templates.js';
 import { executeClientSideCode } from './clientExecutor.js';
+import { parseUrlHash, setUrlHash } from './hashParams.js';
 
 const repo = new IndexedDbProjectRepository();
 
 export const App: React.FC = () => {
-  const [project, setProject] = useState<Project>(() => STARTER_PROJECTS.python());
-  const [activeFilePath, setActiveFilePath] = useState<string>('src/main.py');
+  const initialHash = useRef(parseUrlHash()).current;
+  const [project, setProject] = useState<Project>(() => {
+    if (initialHash.lang && STARTER_PROJECTS[initialHash.lang]) {
+      return STARTER_PROJECTS[initialHash.lang]();
+    }
+    return STARTER_PROJECTS.python();
+  });
+  const [activeFilePath, setActiveFilePath] = useState<string>(() => {
+    return initialHash.file || (initialHash.lang ? STARTER_PROJECTS[initialHash.lang]().entrypoint : 'src/main.py');
+  });
+  const [syntaxColoring, setSyntaxColoring] = useState<boolean>(() => {
+    return initialHash.highlight !== undefined ? initialHash.highlight : true;
+  });
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info'; text: string }[]>([]);
@@ -32,6 +44,16 @@ export const App: React.FC = () => {
     autoSaveRef.current = autoSave;
 
     repo.list().then(async (list) => {
+      // If user provided a specific language via URL hash, prioritize it
+      if (initialHash.lang && STARTER_PROJECTS[initialHash.lang]) {
+        const hashProj = STARTER_PROJECTS[initialHash.lang]();
+        setProject(hashProj);
+        setActiveFilePath(initialHash.file || hashProj.entrypoint);
+        const rev = await repo.save(hashProj);
+        autoSave.setInitialRevision(rev);
+        return;
+      }
+
       if (list.length > 0) {
         const existing = await repo.get(list[0].id);
         if (existing) {
@@ -98,6 +120,11 @@ export const App: React.FC = () => {
     setPendingStdin(null);
     setSuppliedInputs([]);
     setIsRunning(false);
+    setUrlHash({
+      lang,
+      file: newProj.entrypoint,
+      highlight: syntaxColoring,
+    });
     const rev = await repo.save(newProj);
     autoSaveRef.current?.setInitialRevision(rev);
   };
@@ -196,6 +223,24 @@ export const App: React.FC = () => {
     ]);
   };
 
+  const handleToggleSyntaxColoring = (enabled: boolean) => {
+    setSyntaxColoring(enabled);
+    setUrlHash({
+      lang: project.language,
+      file: activeFilePath,
+      highlight: enabled,
+    });
+  };
+
+  const handleSelectFile = (path: string) => {
+    setActiveFilePath(path);
+    setUrlHash({
+      lang: project.language,
+      file: path,
+      highlight: syntaxColoring,
+    });
+  };
+
   return (
     <div
       style={{
@@ -219,7 +264,7 @@ export const App: React.FC = () => {
         <FileTree
           files={project.files}
           activeFile={activeFile.path}
-          onSelectFile={(path) => setActiveFilePath(path)}
+          onSelectFile={handleSelectFile}
           onAddFile={handleAddFile}
           onDeleteFile={handleDeleteFile}
         />
@@ -227,6 +272,8 @@ export const App: React.FC = () => {
           <Editor
             filePath={activeFile.path}
             content={activeFile.content}
+            syntaxColoring={syntaxColoring}
+            onToggleSyntaxColoring={handleToggleSyntaxColoring}
             onChange={handleContentChange}
           />
           <XtermTerminal
