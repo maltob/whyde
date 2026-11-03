@@ -19,6 +19,7 @@ export const App: React.FC = () => {
   const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info'; text: string }[]>([]);
   const [pendingStdin, setPendingStdin] = useState<{ requestId: string; prompt?: string } | null>(null);
   const [suppliedInputs, setSuppliedInputs] = useState<string[]>([]);
+  const lastOutputLengthRef = useRef<number>(0);
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
@@ -104,6 +105,7 @@ export const App: React.FC = () => {
   const handleRun = () => {
     setIsRunning(true);
     setSuppliedInputs([]);
+    lastOutputLengthRef.current = 0;
     setLogs((prev) => [
       ...prev,
       { type: 'info', text: `[Browser IDE] Compiling and running ${project.language} (${activeFile.path})...\n` },
@@ -124,7 +126,12 @@ export const App: React.FC = () => {
       }
 
       if (result.stdout) {
-        setLogs((prev) => [...prev, { type: 'stdout', text: result.stdout }]);
+        const fullOutput = result.stdout;
+        const newSegment = fullOutput.slice(lastOutputLengthRef.current);
+        lastOutputLengthRef.current = fullOutput.length;
+        if (newSegment) {
+          setLogs((prev) => [...prev, { type: 'stdout', text: newSegment }]);
+        }
       }
 
       if (result.requiresStdin) {
@@ -154,7 +161,12 @@ export const App: React.FC = () => {
       project.files
     );
     if (result.stdout) {
-      setLogs((prev) => [...prev, { type: 'stdout', text: result.stdout }]);
+      const fullOutput = result.stdout;
+      const newSegment = fullOutput.slice(lastOutputLengthRef.current);
+      lastOutputLengthRef.current = fullOutput.length;
+      if (newSegment) {
+        setLogs((prev) => [...prev, { type: 'stdout', text: newSegment }]);
+      }
     }
     if (result.stderr) {
       setLogs((prev) => [...prev, { type: 'stderr', text: result.stderr }]);
