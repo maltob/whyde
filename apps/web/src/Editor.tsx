@@ -57,17 +57,77 @@ export const Editor: React.FC<EditorProps> = ({ filePath, content, onChange }) =
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Tab key inserts 4 spaces instead of losing focus
+    // Tab key: indent or outdent (Shift+Tab) supporting single and multi-line selections
     if (e.key === 'Tab') {
       e.preventDefault();
       const target = e.currentTarget;
       const start = target.selectionStart;
       const end = target.selectionEnd;
-      const updated = content.substring(0, start) + '    ' + content.substring(end);
-      onChange(updated);
-      requestAnimationFrame(() => {
-        target.selectionStart = target.selectionEnd = start + 4;
-      });
+
+      // Check if multi-line selection or single cursor on a line with selection
+      const isMultiLine = content.slice(start, end).includes('\n');
+
+      if (!isMultiLine && !e.shiftKey) {
+        // Single cursor or inline selection: insert 4 spaces
+        const updated = content.substring(0, start) + '    ' + content.substring(end);
+        onChange(updated);
+        requestAnimationFrame(() => {
+          target.selectionStart = target.selectionEnd = start + 4;
+        });
+        return;
+      }
+
+      // Multi-line selection or Shift+Tab outdent on current line
+      // Find the start of the first line
+      const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+      // Find the end of the last line
+      let lineEnd = content.indexOf('\n', end);
+      if (lineEnd === -1) {
+        lineEnd = content.length;
+      }
+
+      const selectedLinesText = content.substring(lineStart, lineEnd);
+      const lines = selectedLinesText.split('\n');
+
+      let newStart = start;
+      let newEnd = end;
+
+      if (!e.shiftKey) {
+        // Indent: add 4 spaces to each selected line
+        const indentedLines = lines.map((line, idx) => {
+          if (idx === 0) newStart += 4;
+          newEnd += 4;
+          return '    ' + line;
+        });
+        const updated =
+          content.substring(0, lineStart) + indentedLines.join('\n') + content.substring(lineEnd);
+        onChange(updated);
+        requestAnimationFrame(() => {
+          target.selectionStart = newStart;
+          target.selectionEnd = newEnd;
+        });
+      } else {
+        // Outdent (Shift+Tab): remove up to 4 leading spaces (or 1 tab) from each line
+        const outdentedLines = lines.map((line, idx) => {
+          const match = line.match(/^( {1,4}|\t)/);
+          if (match) {
+            const removed = match[0].length;
+            if (idx === 0) {
+              newStart = Math.max(lineStart, newStart - removed);
+            }
+            newEnd = Math.max(lineStart, newEnd - removed);
+            return line.substring(removed);
+          }
+          return line;
+        });
+        const updated =
+          content.substring(0, lineStart) + outdentedLines.join('\n') + content.substring(lineEnd);
+        onChange(updated);
+        requestAnimationFrame(() => {
+          target.selectionStart = newStart;
+          target.selectionEnd = newEnd;
+        });
+      }
     }
   };
 
