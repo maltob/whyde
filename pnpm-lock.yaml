@@ -19,6 +19,9 @@ importers:
       '@ide/project-model':
         specifier: workspace:*
         version: link:../../packages/project-model
+      '@ide/runner-java':
+        specifier: workspace:*
+        version: link:../../packages/runner-java
       '@ide/runner-python':
         specifier: workspace:*
         version: link:../../packages/runner-python
@@ -132,6 +135,28 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.43)
 
+  packages/runner-java:
+    dependencies:
+      '@ide/execution-contracts':
+        specifier: workspace:*
+        version: link:../execution-contracts
+      '@ide/project-model':
+        specifier: workspace:*
+        version: link:../project-model
+      java-parser:
+        specifier: ^3.0.1
+        version: 3.0.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.8.4
+        version: 20.19.43
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.43)
+
   packages/runner-python:
     dependencies:
       '@ide/execution-contracts':
@@ -224,6 +249,9 @@ importers:
       '@ide/runner-cpp':
         specifier: workspace:*
         version: link:../packages/runner-cpp
+      '@ide/runner-java':
+        specifier: workspace:*
+        version: link:../packages/runner-java
       '@ide/runner-python':
         specifier: workspace:*
         version: link:../packages/runner-python

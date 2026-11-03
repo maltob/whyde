@@ -4,10 +4,10 @@ This document tracks the final acceptance checklist defined in Specification Sec
 
 | Requirement | Implementation Reference | Status | Notes |
 |---|---|---|---|
-| **Python >=3.14 execution without service** | `@ide/runner-python` | **PASS** | Pyodide 314 series running in dedicated Web Worker. |
-| **Java >=11 source compile and execution without service** | `pocs/java-oss`, `docs/feasibility/java.md`, `ADR-008` | **PASS (Experimental OSS Track)** | Verified syntax (`var`, lambdas), multi-file package compilation, and 5 POC-C2 gating criteria without proprietary CheerpJ. |
+| **Python >=3.14 execution without service** | `@ide/runner-python` | **PASS** | Pyodide 314 series running in dedicated Web Worker, verified with real CPython `unittest.suite`. |
+| **Java >=11 source compile and execution without service** | `@ide/runner-java`, `pocs/java-oss`, `docs/feasibility/java.md`, `ADR-008` | **PASS** | Milestone 4 resolved: production `@ide/runner-java` workspace package conforming to `@ide/execution-contracts`, supporting Java 11 syntax (`var`, lambdas), multi-file package compilation, CST/syntax diagnostic reporting, and execution without proprietary CheerpJ. |
 | **C++ >=17 compile/link/run without service** | `@ide/runner-cpp` | **PASS** | YoWASP Clang/LLD/WASI toolchain manifest, multi-translation-unit linking, and diagnostics. |
-| **Interactive stdin, streamed stdout/stderr and Stop** | `@ide/runner-python`, `@ide/runner-cpp`, `@ide/execution-contracts` | **PASS** | Event-driven stdin prompts mid-run without requiring `SharedArrayBuffer` / COOP / COEP headers. |
+| **Interactive stdin, streamed stdout/stderr and Stop** | `@ide/runner-python`, `@ide/runner-java`, `@ide/runner-cpp`, `@ide/execution-contracts` | **PASS** | Event-driven stdin prompts mid-run without requiring `SharedArrayBuffer` / COOP / COEP headers. |
 | **Works on ordinary static HTTPS / GitHub Pages subpath** | `apps/web/vite.config.ts` (`base: './'`), `pocs/hosting-capabilities` | **PASS** | Probed and validated on generic static hosts without custom server headers. |
 | **Zero required backend, account or authentication for core IDE** | `@ide/integration-contracts` (`LocalOnlyProvider`) | **PASS** | Completely anonymous local editing and execution. |
 | **Multi-file/folder projects and reliable autosave/recovery** | `@ide/storage-browser`, `apps/web/src/FileTree.tsx` | **PASS** | IndexedDB with revision conflict detection and debounced autosave. |

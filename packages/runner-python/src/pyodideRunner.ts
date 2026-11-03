@@ -1,6 +1,4 @@
 import { Project, RuntimeEvent } from '@ide/execution-contracts';
-import { createRequire } from 'module';
-import path from 'path';
 
 let cachedPyodidePromise: Promise<any> | null = null;
 
@@ -18,9 +16,11 @@ export async function getPyodideInstance(options?: { indexURL?: string; packageC
         opts.packageCacheDir = options.packageCacheDir;
       } else if (typeof process !== 'undefined' && process.versions?.node) {
         try {
+          const { createRequire } = await import('module');
+          const pathModule = await import('path');
           const req = createRequire(import.meta.url);
           const pkgPath = req.resolve('pyodide/package.json');
-          const pyodideDir = path.dirname(pkgPath) + path.sep;
+          const pyodideDir = pathModule.dirname(pkgPath) + pathModule.sep;
           opts.packageCacheDir = pyodideDir;
           if (!opts.indexURL) {
             opts.indexURL = pyodideDir;

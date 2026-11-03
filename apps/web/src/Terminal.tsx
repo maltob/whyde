@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal as TerminalIcon, Send, Trash2 } from 'lucide-react';
+import { Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 
 interface TerminalProps {
   logs: { type: 'stdout' | 'stderr' | 'info'; text: string }[];
@@ -16,21 +16,33 @@ export const Terminal: React.FC<TerminalProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (pendingStdin) {
+      inputRef.current?.focus();
+    }
+  }, [logs, pendingStdin]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingStdin) return;
-    onSupplyStdin(pendingStdin.requestId, inputText);
+    const value = inputText;
     setInputText('');
+    onSupplyStdin(pendingStdin.requestId, value);
+  };
+
+  const handleTerminalClick = () => {
+    if (pendingStdin) {
+      inputRef.current?.focus();
+    }
   };
 
   return (
     <section
       aria-label="Interactive Terminal and Output"
+      onClick={handleTerminalClick}
       style={{
         height: '240px',
         backgroundColor: '#090d16',
@@ -38,7 +50,8 @@ export const Terminal: React.FC<TerminalProps> = ({
         borderTop: '1px solid #334155',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        cursor: pendingStdin ? 'text' : 'default',
       }}
     >
       <div
@@ -55,11 +68,14 @@ export const Terminal: React.FC<TerminalProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <TerminalIcon size={14} />
-          <span>CONSOLE / STDIN</span>
+          <span>TERMINAL</span>
         </div>
         <button
           aria-label="Clear Console"
-          onClick={onClear}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
           style={{
             background: 'none',
             border: 'none',
@@ -83,11 +99,11 @@ export const Terminal: React.FC<TerminalProps> = ({
           flex: 1,
           padding: '12px 16px',
           overflowY: 'auto',
-          fontSize: '0.85rem',
-          lineHeight: 1.4,
+          fontSize: '0.875rem',
+          lineHeight: 1.5,
         }}
       >
-        {logs.length === 0 ? (
+        {logs.length === 0 && !pendingStdin ? (
           <span style={{ color: '#475569' }}>Program output will appear here. Press Run to execute.</span>
         ) : (
           logs.map((log, i) => (
@@ -103,62 +119,47 @@ export const Terminal: React.FC<TerminalProps> = ({
             </div>
           ))
         )}
-        <div ref={logEndRef} />
-      </div>
 
-      {pendingStdin && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: 'flex',
-            borderTop: '1px solid #1e293b',
-            backgroundColor: '#0f172a',
-            padding: '6px 12px',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <label htmlFor="stdin-input" style={{ fontSize: '0.8rem', color: '#fbbf24' }}>
-            {pendingStdin.prompt || 'Input requested >'}
-          </label>
-          <input
-            id="stdin-input"
-            autoFocus
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+        {/* Real inline terminal stdin prompt */}
+        {pendingStdin && (
+          <form
+            onSubmit={handleSubmit}
             style={{
-              flex: 1,
-              backgroundColor: '#090d16',
-              border: '1px solid #3b82f6',
-              borderRadius: '4px',
-              padding: '6px 8px',
-              color: '#f8fafc',
-              fontFamily: 'monospace',
-              fontSize: '0.85rem',
-            }}
-          />
-          <button
-            type="submit"
-            aria-label="Send Input"
-            style={{
-              backgroundColor: '#2563eb',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'white',
-              padding: '6px 12px',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              fontSize: '0.8rem',
+              flexWrap: 'wrap',
+              margin: '2px 0',
             }}
           >
-            <Send size={14} />
-            Submit
-          </button>
-        </form>
-      )}
+            <span style={{ color: '#e2e8f0', marginRight: '6px', whiteSpace: 'pre' }}>
+              {pendingStdin.prompt || '> '}
+            </span>
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flex: 1, minWidth: '120px' }}>
+              <input
+                ref={inputRef}
+                autoFocus
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: '#fbbf24',
+                  fontFamily: 'inherit',
+                  fontSize: 'inherit',
+                  lineHeight: 'inherit',
+                  width: '100%',
+                  padding: 0,
+                  margin: 0,
+                  caretColor: '#38bdf8',
+                }}
+              />
+            </div>
+          </form>
+        )}
+        <div ref={logEndRef} />
+      </div>
     </section>
   );
 };

@@ -3,6 +3,7 @@ import { Project } from '@ide/project-model';
 import { PythonRuntimeProvider } from '@ide/runner-python';
 import { CppRuntimeProvider } from '@ide/runner-cpp';
 import { BrowserJavaRunner } from '@pocs/java-oss/runner.js';
+import { JavaRuntimeProvider, DirectJavaWorkerBridge } from '@ide/runner-java';
 import { runLocalAssignmentEvaluation, AssignmentPackage } from '@ide/assignments';
 
 describe('University .EDU Course Code Sandbox Verification', () => {
@@ -193,6 +194,38 @@ public class Average {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('Hi Alan Turing\n');
+
+    // Also verify via the production @ide/runner-java RuntimeProvider
+    const javaProject: Project = {
+      schemaVersion: 1,
+      kind: 'browser-ide-project',
+      id: 'princeton-cos126',
+      name: 'Princeton COS126',
+      language: 'java',
+      entrypoint: 'Average.java',
+      files: [{ path: 'Average.java', encoding: 'utf-8', content: princetonCode }],
+      toolchain: { runtimeId: 'java-browser', requestedVersion: '11.0.0' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    let capturedJavaOutput = '';
+    const bridge = new DirectJavaWorkerBridge();
+    const provider = new JavaRuntimeProvider(() => bridge);
+    await provider.run(
+      {
+        runId: 'run-princeton',
+        project: javaProject,
+        settings: { maxRunTimeMs: 5000, maxOutputBytes: 4096, maxFiles: 10, maxProjectBytes: 4096 },
+        mode: 'normal',
+      },
+      (e) => {
+        if (e.type === 'stdout') capturedJavaOutput += e.text;
+        if (e.type === 'stdin-request') {
+          provider.supplyInput('run-princeton', e.requestId, 'Alan Turing');
+        }
+      }
+    );
+    expect(capturedJavaOutput).toBe('Hi Alan Turing\n');
   });
 
   // -------------------------------------------------------------

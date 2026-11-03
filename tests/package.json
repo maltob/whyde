@@ -12,7 +12,8 @@
     "@ide/project-model": "workspace:*",
     "@ide/runner-cpp": "workspace:*",
     "@ide/runner-python": "workspace:*",
-    "@pocs/java-oss": "workspace:*"
+    "@pocs/java-oss": "workspace:*",
+    "@ide/runner-java": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
