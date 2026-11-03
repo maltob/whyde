@@ -27,6 +27,19 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
   const lineBufferRef = useRef<string>('');
   const lastRenderedLogIndexRef = useRef<number>(0);
 
+  // Keep latest callbacks/props in refs so listeners don't have stale closures
+  const pendingStdinRef = useRef(pendingStdin);
+  pendingStdinRef.current = pendingStdin;
+
+  const onSupplyStdinRef = useRef(onSupplyStdin);
+  onSupplyStdinRef.current = onSupplyStdin;
+
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
+
+  const rawModeRef = useRef(rawMode);
+  rawModeRef.current = rawMode;
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -66,11 +79,11 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
     // Handle character input from terminal emulator
     term.onData((data) => {
       // If consumer provided a raw streaming character handler, pipe directly
-      if (onData) {
-        onData(data);
+      if (onDataRef.current) {
+        onDataRef.current(data);
       }
 
-      if (rawMode) {
+      if (rawModeRef.current) {
         // Raw mode: do not locally line-edit or buffer, data stream already sent
         return;
       }
@@ -81,8 +94,8 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
         term.write('\r\n');
         const submitted = lineBufferRef.current;
         lineBufferRef.current = '';
-        if (pendingStdin) {
-          onSupplyStdin(pendingStdin.requestId, submitted);
+        if (pendingStdinRef.current) {
+          onSupplyStdinRef.current(pendingStdinRef.current.requestId, submitted);
         }
       } else if (data === '\u007f' || data === '\b') {
         // Backspace: handle erase
@@ -140,7 +153,7 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
     lastRenderedLogIndexRef.current = logs.length;
   }, [logs]);
 
-  // When pendingStdin changes, focus terminal and show prompt if provided
+  // When pendingStdin changes, focus terminal
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
@@ -148,9 +161,6 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
     if (pendingStdin) {
       term.focus();
       lineBufferRef.current = '';
-      if (pendingStdin.prompt) {
-        term.write(`\x1b[33m${pendingStdin.prompt}\x1b[0m`);
-      }
     }
   }, [pendingStdin]);
 

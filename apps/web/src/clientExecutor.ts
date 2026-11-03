@@ -745,9 +745,13 @@ function executePyLines(
     if (inputAssignMatch || inputBareMatch) {
       const varName = inputAssignMatch ? inputAssignMatch[1] : null;
       const rawPrompt = inputAssignMatch ? inputAssignMatch[2] : (inputBareMatch ? inputBareMatch[1] : '');
-      const promptStr = rawPrompt ? evalPyExpr(rawPrompt, scope, functions) : 'Input: ';
+      const promptStr = rawPrompt ? evalPyExpr(rawPrompt, scope, functions) : '';
 
       if (state.inputIndex >= state.suppliedInputs.length) {
+        // Output prompt immediately to stdout in execution sequence
+        if (promptStr) {
+          state.stdout += String(promptStr);
+        }
         state.waitingForStdin = {
           requestId: `py-stdin-${Date.now()}`,
           prompt: String(promptStr),

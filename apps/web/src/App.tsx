@@ -146,11 +146,6 @@ export const App: React.FC = () => {
     const nextInputs = [...suppliedInputs, input];
     setSuppliedInputs(nextInputs);
 
-    setLogs((prev) => [
-      ...prev,
-      { type: 'stdout', text: `${input}\n` },
-    ]);
-
     // Resume execution with the supplied inputs
     const result = executeClientSideCode(
       project.language,

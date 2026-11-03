@@ -32,10 +32,10 @@ def main():
 if __name__ == "__main__":
     main()
 `;
-      // Step 1: initial run prompts for input
+      // Step 1: initial run prints preceding statements and prompt in order
       const res1 = executeClientSideCode('python', code, undefined);
       expect(res1.exitCode).toBe(0);
-      expect(res1.stdout).toBe('Hello from Python 3.14.2!\n');
+      expect(res1.stdout).toBe('Hello from Python 3.14.2!\nWhat is your name? ');
       expect(res1.requiresStdin).toBeDefined();
       expect(res1.requiresStdin?.prompt).toBe('What is your name? ');
 
