@@ -18,6 +18,7 @@ export const App: React.FC = () => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info'; text: string }[]>([]);
   const [pendingStdin, setPendingStdin] = useState<{ requestId: string; prompt?: string } | null>(null);
+  const [suppliedInputs, setSuppliedInputs] = useState<string[]>([]);
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
@@ -94,6 +95,7 @@ export const App: React.FC = () => {
     setActiveFilePath(newProj.entrypoint);
     setLogs([]);
     setPendingStdin(null);
+    setSuppliedInputs([]);
     setIsRunning(false);
     const rev = await repo.save(newProj);
     autoSaveRef.current?.setInitialRevision(rev);
@@ -101,6 +103,7 @@ export const App: React.FC = () => {
 
   const handleRun = () => {
     setIsRunning(true);
+    setSuppliedInputs([]);
     setLogs((prev) => [
       ...prev,
       { type: 'info', text: `[Browser IDE] Compiling and running ${project.language} (${activeFile.path})...\n` },
@@ -140,16 +143,19 @@ export const App: React.FC = () => {
   };
 
   const handleSupplyStdin = (requestId: string, input: string) => {
+    const nextInputs = [...suppliedInputs, input];
+    setSuppliedInputs(nextInputs);
+
     setLogs((prev) => [
       ...prev,
       { type: 'stdout', text: `${input}\n` },
     ]);
 
-    // Resume execution with the supplied input
+    // Resume execution with the supplied inputs
     const result = executeClientSideCode(
       project.language,
       activeFile.content,
-      input,
+      nextInputs,
       project.files
     );
     if (result.stdout) {
@@ -158,12 +164,20 @@ export const App: React.FC = () => {
     if (result.stderr) {
       setLogs((prev) => [...prev, { type: 'stderr', text: result.stderr }]);
     }
-    setLogs((prev) => [
-      ...prev,
-      { type: 'info', text: `[Browser IDE] Program completed with exit code ${result.exitCode}.\n` },
-    ]);
-    setPendingStdin(null);
-    setIsRunning(false);
+
+    if (result.requiresStdin) {
+      setPendingStdin({
+        requestId: result.requiresStdin.requestId,
+        prompt: result.requiresStdin.prompt,
+      });
+    } else {
+      setLogs((prev) => [
+        ...prev,
+        { type: 'info', text: `[Browser IDE] Program completed with exit code ${result.exitCode}.\n` },
+      ]);
+      setPendingStdin(null);
+      setIsRunning(false);
+    }
   };
 
   const handleStop = () => {

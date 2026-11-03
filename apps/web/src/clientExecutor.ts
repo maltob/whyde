@@ -10,16 +10,16 @@ export interface InterpretedExecutionResult {
 export function executeClientSideCode(
   language: 'python' | 'java' | 'cpp',
   code: string,
-  suppliedInput?: string,
+  suppliedInput?: string | string[],
   allFiles: { path: string; content: string }[] = []
 ): InterpretedExecutionResult {
   try {
     if (language === 'python') {
       return runPython(code, suppliedInput, allFiles);
     } else if (language === 'java') {
-      return executeJavaProgram(code, suppliedInput, allFiles);
+      return executeJavaProgram(code, typeof suppliedInput === 'string' ? suppliedInput : suppliedInput?.[0], allFiles);
     } else {
-      return runCpp(code, suppliedInput, allFiles);
+      return runCpp(code, typeof suppliedInput === 'string' ? suppliedInput : suppliedInput?.[0], allFiles);
     }
   } catch (err: any) {
     return {
@@ -279,9 +279,8 @@ interface PythonFunction {
 
 interface PythonInterpreterState {
   stdout: string;
-  suppliedInput?: string;
-  hasPassedStdin: boolean;
-  isAfterStdinOnly: boolean;
+  suppliedInputs: string[];
+  inputIndex: number;
   waitingForStdin?: { requestId: string; prompt: string };
 }
 
@@ -293,7 +292,7 @@ const pySys = {
 
 function runPython(
   code: string,
-  suppliedInput?: string,
+  suppliedInput?: string | string[],
   allFiles: { path: string; content: string }[] = []
 ): InterpretedExecutionResult {
   const lines = code.split('\n');
@@ -311,9 +310,8 @@ function runPython(
 
   const state: PythonInterpreterState = {
     stdout: '',
-    suppliedInput,
-    hasPassedStdin: false,
-    isAfterStdinOnly: suppliedInput !== undefined,
+    suppliedInputs: suppliedInput !== undefined ? (Array.isArray(suppliedInput) ? suppliedInput : [suppliedInput]) : [],
+    inputIndex: 0,
   };
 
   const scope: Record<string, any> = {
@@ -535,8 +533,8 @@ function evalPyExpr(expr: string, scope: Record<string, any>, functions: Record<
       });
       const res = executePyLines(fn.bodyLines, fnScope, functions, {
         stdout: '',
-        hasPassedStdin: false,
-        isAfterStdinOnly: false,
+        suppliedInputs: [],
+        inputIndex: 0,
       });
       return res.returnValue;
     }
@@ -736,9 +734,7 @@ function executePyLines(
         const v = evalPyExpr(a, scope, functions);
         return v !== undefined ? String(v) : '';
       });
-      if (!state.isAfterStdinOnly || state.hasPassedStdin) {
-        state.stdout += values.join(' ') + '\n';
-      }
+      state.stdout += values.join(' ') + '\n';
       i++;
       continue;
     }
@@ -751,17 +747,17 @@ function executePyLines(
       const rawPrompt = inputAssignMatch ? inputAssignMatch[2] : (inputBareMatch ? inputBareMatch[1] : '');
       const promptStr = rawPrompt ? evalPyExpr(rawPrompt, scope, functions) : 'Input: ';
 
-      if (state.suppliedInput === undefined) {
+      if (state.inputIndex >= state.suppliedInputs.length) {
         state.waitingForStdin = {
           requestId: `py-stdin-${Date.now()}`,
           prompt: String(promptStr),
         };
         return { paused: true };
       } else {
+        const currentInput = state.suppliedInputs[state.inputIndex++];
         if (varName) {
-          scope[varName] = state.suppliedInput;
+          scope[varName] = currentInput;
         }
-        state.hasPassedStdin = true;
         i++;
         continue;
       }
