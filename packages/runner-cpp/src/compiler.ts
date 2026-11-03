@@ -1,4 +1,4 @@
-import { Fd, WASI } from '@bjorn3/browser_wasi_shim';
+import { Fd, WASI, File, PreopenDirectory } from '@bjorn3/browser_wasi_shim';
 // @ts-ignore
 import { commands } from '@yowasp/clang';
 
@@ -106,7 +106,20 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{
   const stdoutFd = new StreamFd({ onWrite: onStdout });
   const stderrFd = new StreamFd({ onWrite: onStderr });
 
-  const fds = [stdinFd, stdoutFd, stderrFd];
+  // Mount non-code project files (e.g. pets.txt, data.csv) into virtual filesystem root
+  const dirContents = new Map<string, File>();
+  const encoder = new TextEncoder();
+  for (const [filename, content] of Object.entries(files)) {
+    const isCode = filename.endsWith('.cpp') || filename.endsWith('.hpp') || filename.endsWith('.h') || filename.endsWith('.cc');
+    if (!isCode) {
+      // Clean path if leading slash
+      const cleanName = filename.replace(/^[/\\]+/, '');
+      dirContents.set(cleanName, new File(encoder.encode(content)));
+    }
+  }
+  const preopenDir = new PreopenDirectory('.', dirContents);
+
+  const fds = [stdinFd, stdoutFd, stderrFd, preopenDir];
   const wasi = new WASI(['out.wasm'], [], fds as any);
 
   try {
