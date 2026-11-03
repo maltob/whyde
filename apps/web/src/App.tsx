@@ -5,7 +5,7 @@ import { AutoSaveManager } from '@ide/storage-browser/autosave';
 import { Header } from './Header.js';
 import { FileTree } from './FileTree.js';
 import { Editor } from './Editor.js';
-import { Terminal } from './Terminal.js';
+import { XtermTerminal } from './XtermTerminal.js';
 import { STARTER_PROJECTS } from './templates.js';
 import { executeClientSideCode } from './clientExecutor.js';
 
@@ -222,7 +222,7 @@ export const App: React.FC = () => {
             content={activeFile.content}
             onChange={handleContentChange}
           />
-          <Terminal
+          <XtermTerminal
             logs={logs}
             pendingStdin={pendingStdin}
             onSupplyStdin={handleSupplyStdin}
