@@ -1,0 +1,22 @@
+{
+  "name": "@ide/runner-java",
+  "version": "0.1.0",
+  "description": "Production Java 11+ compiler and runtime adapter (Milestone 4)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ide/execution-contracts": "workspace:*",
+    "@ide/project-model": "workspace:*",
+    "java-parser": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.4",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
