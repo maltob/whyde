@@ -70,10 +70,134 @@ function buildTree(files: ProjectFile[]): TreeNode {
 }
 
 function getFileIcon(name: string, isActive: boolean) {
-  if (name.endsWith('.txt') || name.endsWith('.md') || name.endsWith('.csv')) {
-    return <FileText size={15} color={isActive ? '#38bdf8' : '#e2e8f0'} />;
+  const ext = name.split('.').pop()?.toLowerCase();
+
+  switch (ext) {
+    case 'py':
+      // Python (Golden/Yellow with snake badge)
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '9px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#fbbf24',
+            color: '#090d16',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="Python"
+        >
+          Py
+        </span>
+      );
+    case 'cpp':
+    case 'cc':
+    case 'cxx':
+      // C++ (Vibrant Blue badge)
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '8px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#0284c7',
+            color: '#ffffff',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="C++"
+        >
+          C+
+        </span>
+      );
+    case 'hpp':
+    case 'h':
+      // C/C++ Header (Purple badge)
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '9px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#9333ea',
+            color: '#ffffff',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="C/C++ Header"
+        >
+          H
+        </span>
+      );
+    case 'java':
+      // Java (Orange/Red Coffee badge)
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '8px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#ea580c',
+            color: '#ffffff',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="Java"
+        >
+          Jv
+        </span>
+      );
+    case 'json':
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '8px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#eab308',
+            color: '#1e293b',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="JSON"
+        >
+          {"{}"}
+        </span>
+      );
+    case 'txt':
+    case 'md':
+    case 'csv':
+    case 'log':
+      return <FileText size={15} color={isActive ? '#38bdf8' : '#94a3b8'} />;
+    default:
+      return <FileCode size={15} color={isActive ? '#38bdf8' : '#64748b'} />;
   }
-  return <FileCode size={15} color={isActive ? '#38bdf8' : '#94a3b8'} />;
 }
 
 export const FileTree: React.FC<FileTreeProps> = ({
