@@ -152,7 +152,7 @@ export const App: React.FC = () => {
     if (project.language === 'python') {
       executePythonInPyodide(project, {
         indexURL: typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'pyodide/') : undefined,
-        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
+        stdin: undefined,
         onStdout: (text) => {
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
         },
@@ -196,7 +196,7 @@ export const App: React.FC = () => {
       compileAndRunCpp({
         files: filesMap,
         standard: 'c++17',
-        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
+        stdin: undefined,
         onInfo: (text) => {
           setLogs((prev) => [...prev, { type: 'info', text }]);
         },
@@ -245,7 +245,7 @@ export const App: React.FC = () => {
 
     if (project.language === 'java') {
       compileAndRunJava(project, {
-        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
+        stdin: undefined,
         onStdout: (text) => {
           lastOutputLengthRef.current += text.length;
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
