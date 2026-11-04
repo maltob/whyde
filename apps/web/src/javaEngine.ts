@@ -180,7 +180,7 @@ export function executeJavaProgram(
 }
 
 function evalJavaPrintExpr(expr: string, scope: Record<string, any>, suppliedInput?: string): string {
-  if (expr.startsWith('"') && expr.endsWith('"')) {
+  if (expr.startsWith('"') && expr.endsWith('"') && !expr.slice(1, -1).includes('"')) {
     return expr.slice(1, -1);
   }
 

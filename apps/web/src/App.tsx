@@ -40,6 +40,7 @@ export const App: React.FC = () => {
   const [pendingStdin, setPendingStdin] = useState<{ requestId: string; prompt?: string } | null>(null);
   const [suppliedInputs, setSuppliedInputs] = useState<string[]>([]);
   const lastOutputLengthRef = useRef<number>(0);
+  const compiledWasmRef = useRef<Uint8Array | null>(null);
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
@@ -185,42 +186,54 @@ export const App: React.FC = () => {
     }
 
     if (project.language === 'cpp') {
+      compiledWasmRef.current = null;
       const filesMap: Record<string, string> = {};
       for (const f of project.files) {
         filesMap[f.path] = f.content;
       }
 
+      let runOutput = '';
       compileAndRunCpp({
         files: filesMap,
         standard: 'c++17',
         stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
-        requestStdin: () => {
-          if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-            try {
-              const res = window.prompt('Enter your input:');
-              return res !== null ? res : '';
-            } catch {
-              return '';
-            }
-          }
-          return '';
-        },
         onInfo: (text) => {
           setLogs((prev) => [...prev, { type: 'info', text }]);
         },
         onStdout: (text) => {
+          runOutput += text;
+          lastOutputLengthRef.current += text.length;
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
         },
         onStderr: (text) => {
           setLogs((prev) => [...prev, { type: 'stderr', text }]);
         },
+        onEvent: (event) => {
+          if (event.type === 'stdin-request') {
+            setPendingStdin({
+              requestId: event.requestId,
+              prompt: event.prompt || 'Enter input: ',
+            });
+          }
+        },
       }).then(
         (res) => {
-          setLogs((prev) => [
-            ...prev,
-            { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
-          ]);
-          setIsRunning(false);
+          if (res.compiledWasm) {
+            compiledWasmRef.current = res.compiledWasm;
+          }
+          if (res.requiresStdin) {
+            setPendingStdin({
+              requestId: res.requiresStdin.requestId,
+              prompt: res.requiresStdin.prompt || 'Enter input: ',
+            });
+          } else {
+            setLogs((prev) => [
+              ...prev,
+              { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+            ]);
+            setPendingStdin(null);
+            setIsRunning(false);
+          }
         },
         (err) => {
           setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
@@ -319,6 +332,65 @@ export const App: React.FC = () => {
       setPendingStdin(null);
       setLogs((prev) => [...prev, { type: 'stdout', text: input + '\n' }]);
       resolver(input);
+      return;
+    }
+
+    if (project.language === 'cpp') {
+      const filesMap: Record<string, string> = {};
+      for (const f of project.files) {
+        filesMap[f.path] = f.content;
+      }
+
+      let runOutput = '';
+      compileAndRunCpp({
+        files: filesMap,
+        standard: 'c++17',
+        stdin: nextInputs.join('\n'),
+        compiledWasm: compiledWasmRef.current || undefined,
+        onStdout: (text) => {
+          runOutput += text;
+        },
+        onStderr: (text) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+        onEvent: (event) => {
+          if (event.type === 'stdin-request') {
+            setPendingStdin({
+              requestId: event.requestId,
+              prompt: event.prompt || 'Enter input: ',
+            });
+          }
+        },
+      }).then(
+        (res) => {
+          if (res.compiledWasm) {
+            compiledWasmRef.current = res.compiledWasm;
+          }
+          const newSegment = runOutput.slice(lastOutputLengthRef.current);
+          lastOutputLengthRef.current = runOutput.length;
+          if (newSegment) {
+            setLogs((prev) => [...prev, { type: 'stdout', text: newSegment }]);
+          }
+
+          if (res.requiresStdin) {
+            setPendingStdin({
+              requestId: res.requiresStdin.requestId,
+              prompt: res.requiresStdin.prompt || 'Enter input: ',
+            });
+          } else {
+            setLogs((prev) => [
+              ...prev,
+              { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+            ]);
+            setPendingStdin(null);
+            setIsRunning(false);
+          }
+        },
+        (err) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setIsRunning(false);
+        }
+      );
       return;
     }
 

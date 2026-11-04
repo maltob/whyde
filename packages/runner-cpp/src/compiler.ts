@@ -20,15 +20,29 @@ class StreamFd extends Fd {
   }
 }
 
+export class StdinRequiredError extends Error {
+  requestId: string;
+  prompt: string;
+
+  constructor(requestId: string, prompt: string = 'Enter input: ') {
+    super('StdinRequiredError');
+    this.name = 'StdinRequiredError';
+    this.requestId = requestId;
+    this.prompt = prompt;
+  }
+}
+
 class StdinFd extends Fd {
   private buffer: Uint8Array = new Uint8Array(0);
   private offset: number = 0;
   private eofReached: boolean = false;
   private requestStdin?: () => string;
+  private requestId: string;
 
-  constructor(inputString?: string, requestStdin?: () => string) {
+  constructor(inputString?: string, requestStdin?: () => string, requestId: string = `cpp-stdin-${Date.now()}`) {
     super();
     this.requestStdin = requestStdin;
+    this.requestId = requestId;
     if (inputString !== undefined && inputString !== '') {
       this.buffer = new TextEncoder().encode(inputString.endsWith('\n') ? inputString : inputString + '\n');
     }
@@ -45,6 +59,9 @@ class StdinFd extends Fd {
         } else {
           this.eofReached = true;
         }
+      } else if (!this.eofReached) {
+        // Halt synchronous execution cleanly and prompt for stdin via terminal emulator
+        throw new StdinRequiredError(this.requestId, 'Enter input: ');
       }
     }
 
@@ -59,14 +76,31 @@ class StdinFd extends Fd {
   }
 }
 
+export interface RuntimeEvent {
+  type: 'stdin-request' | 'info';
+  requestId: string;
+  prompt?: string;
+}
+
 export interface CompileAndRunOptions {
   files: Record<string, string>;
   standard?: string;
   stdin?: string;
   requestStdin?: () => string;
+  compiledWasm?: Uint8Array;
   onStdout: (text: string) => void;
   onStderr: (text: string) => void;
   onInfo?: (text: string) => void;
+  onEvent?: (event: RuntimeEvent) => void;
+}
+
+export interface CompileAndRunResult {
+  exitCode: number;
+  compiledWasm?: Uint8Array;
+  requiresStdin?: {
+    requestId: string;
+    prompt: string;
+  };
 }
 
 /**
@@ -96,70 +130,77 @@ function buildYoWASPFileSystem(files: Record<string, string>): Record<string, an
   return root;
 }
 
-export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{ exitCode: number }> {
-  const { files, standard = 'c++17', stdin, requestStdin, onStdout, onStderr, onInfo } = options;
+export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<CompileAndRunResult> {
+  const { files, standard = 'c++17', stdin, requestStdin, compiledWasm, onStdout, onStderr, onInfo, onEvent } = options;
 
-  onInfo?.(`Compiling ${Object.keys(files).length} translation unit(s) with Clang (${standard})...\n`);
+  let wasmBinary: Uint8Array;
 
-  // Build nested directory structure for YoWASP VFS
-  const yoWASPFiles = buildYoWASPFileSystem(files);
+  if (compiledWasm) {
+    wasmBinary = compiledWasm;
+  } else {
+    onInfo?.(`Compiling ${Object.keys(files).length} translation unit(s) with Clang (${standard})...\n`);
 
-  // Collect compilation source files and include directories
-  const cppFiles = Object.keys(files).filter((f) => f.endsWith('.cpp') || f.endsWith('.cc') || f.endsWith('.c'));
-  const includeDirs = new Set<string>();
-  for (const f of Object.keys(files)) {
-    const clean = f.replace(/^[/\\]+/, '');
-    const lastSlash = clean.lastIndexOf('/');
-    if (lastSlash > 0) {
-      includeDirs.add(clean.substring(0, lastSlash));
+    // Build nested directory structure for YoWASP VFS
+    const yoWASPFiles = buildYoWASPFileSystem(files);
+
+    // Collect compilation source files and include directories
+    const cppFiles = Object.keys(files).filter((f) => f.endsWith('.cpp') || f.endsWith('.cc') || f.endsWith('.c'));
+    const includeDirs = new Set<string>();
+    for (const f of Object.keys(files)) {
+      const clean = f.replace(/^[/\\]+/, '');
+      const lastSlash = clean.lastIndexOf('/');
+      if (lastSlash > 0) {
+        includeDirs.add(clean.substring(0, lastSlash));
+      }
     }
-  }
-  const includeFlags = Array.from(includeDirs).map((d) => `-I${d}`);
+    const includeFlags = Array.from(includeDirs).map((d) => `-I${d}`);
 
-  const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, ...cppFiles, '-o', 'out.wasm'];
+    const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, ...cppFiles, '-o', 'out.wasm'];
 
-  let compileStderr = '';
-  let compileStdout = '';
+    let compileStderr = '';
+    let compileStdout = '';
 
-  let compileResultFiles: any;
-  try {
-    compileResultFiles = await commands['clang++'](clangArgs, yoWASPFiles, {
-      stdout: (chunk: Uint8Array | null) => {
-        if (!chunk) return;
-        compileStdout += new TextDecoder().decode(chunk);
-      },
-      stderr: (chunk: Uint8Array | null) => {
-        if (!chunk) return;
-        compileStderr += new TextDecoder().decode(chunk);
-      },
-    });
-  } catch (err: any) {
+    let compileResultFiles: any;
+    try {
+      compileResultFiles = await commands['clang++'](clangArgs, yoWASPFiles, {
+        stdout: (chunk: Uint8Array | null) => {
+          if (!chunk) return;
+          compileStdout += new TextDecoder().decode(chunk);
+        },
+        stderr: (chunk: Uint8Array | null) => {
+          if (!chunk) return;
+          compileStderr += new TextDecoder().decode(chunk);
+        },
+      });
+    } catch (err: any) {
+      if (compileStderr) {
+        onStderr(compileStderr);
+      } else {
+        onStderr(`Compilation error: ${err?.message || err}\n`);
+      }
+      return { exitCode: 1 };
+    }
+
     if (compileStderr) {
       onStderr(compileStderr);
-    } else {
-      onStderr(`Compilation error: ${err?.message || err}\n`);
     }
-    return { exitCode: 1 };
+
+    const wasmBinaryRaw = compileResultFiles ? compileResultFiles['out.wasm'] : null;
+    if (!wasmBinaryRaw) {
+      onStderr('Error: Compilation produced no WebAssembly executable.\n');
+      return { exitCode: 1 };
+    }
+
+    wasmBinary = wasmBinaryRaw instanceof Uint8Array
+      ? new Uint8Array(wasmBinaryRaw.buffer.slice(wasmBinaryRaw.byteOffset, wasmBinaryRaw.byteOffset + wasmBinaryRaw.byteLength))
+      : new Uint8Array(wasmBinaryRaw);
+
+    onInfo?.(`Compilation successful (${wasmBinary.length} bytes). Executing WASI binary...\n`);
   }
-
-  if (compileStderr) {
-    onStderr(compileStderr);
-  }
-
-  const wasmBinaryRaw = compileResultFiles ? compileResultFiles['out.wasm'] : null;
-  if (!wasmBinaryRaw) {
-    onStderr('Error: Compilation produced no WebAssembly executable.\n');
-    return { exitCode: 1 };
-  }
-
-  const wasmBinary: Uint8Array = wasmBinaryRaw instanceof Uint8Array
-    ? new Uint8Array(wasmBinaryRaw.buffer.slice(wasmBinaryRaw.byteOffset, wasmBinaryRaw.byteOffset + wasmBinaryRaw.byteLength))
-    : new Uint8Array(wasmBinaryRaw);
-
-  onInfo?.(`Compilation successful (${wasmBinary.length} bytes). Executing WASI binary...\n`);
 
   // Set up WASI host environment
-  const stdinFd = new StdinFd(stdin, requestStdin);
+  const stdinRequestId = `cpp-stdin-${Date.now()}`;
+  const stdinFd = new StdinFd(stdin, requestStdin, stdinRequestId);
   const stdoutFd = new StreamFd({ onWrite: onStdout });
   const stderrFd = new StreamFd({ onWrite: onStderr });
 
@@ -185,12 +226,33 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{
       wasi_snapshot_preview1: wasi.wasiImport,
     });
     const exitCode = wasi.start(instance as any);
-    return { exitCode: typeof exitCode === 'number' ? exitCode : 0 };
+    return {
+      exitCode: typeof exitCode === 'number' ? exitCode : 0,
+      compiledWasm: wasmBinary,
+    };
   } catch (err: any) {
+    if (err instanceof StdinRequiredError) {
+      onEvent?.({
+        type: 'stdin-request',
+        requestId: err.requestId,
+        prompt: err.prompt,
+      });
+      return {
+        exitCode: 0,
+        compiledWasm: wasmBinary,
+        requiresStdin: {
+          requestId: err.requestId,
+          prompt: err.prompt,
+        },
+      };
+    }
     if (err?.name === 'WASIProcExit') {
-      return { exitCode: err.code || 0 };
+      return {
+        exitCode: err.code || 0,
+        compiledWasm: wasmBinary,
+      };
     }
     onStderr(`Runtime error: ${err?.message || err}\n`);
-    return { exitCode: 1 };
+    return { exitCode: 1, compiledWasm: wasmBinary };
   }
 }

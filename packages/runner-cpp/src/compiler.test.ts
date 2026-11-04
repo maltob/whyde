@@ -42,4 +42,51 @@ void greet() {
     expect(stdout).toContain('Greetings from helper!');
     expect(stderr).toBe('');
   }, 30000);
+
+  it('pauses on std::cin when no stdin is supplied, then resumes cleanly on replay with cached wasm', async () => {
+    const mainWithCin = `#include <iostream>
+#include <string>
+
+int main() {
+    std::cout << "Enter name: ";
+    std::string name;
+    if (std::cin >> name) {
+        std::cout << "Hello, " << name << "!" << std::endl;
+    }
+    return 0;
+}
+`;
+
+    let stdout1 = '';
+    const res1 = await compileAndRunCpp({
+      files: {
+        'src/main.cpp': mainWithCin,
+      },
+      standard: 'c++17',
+      onStdout: (text) => { stdout1 += text; },
+      onStderr: () => {},
+    });
+
+    expect(res1.requiresStdin).toBeDefined();
+    expect(res1.requiresStdin?.prompt).toBe('Enter input: ');
+    expect(stdout1).toBe('Enter name: ');
+    expect(res1.compiledWasm).toBeDefined();
+
+    // Replay with user input 'Alice' and the cached WASM binary (skips clang)
+    let stdout2 = '';
+    const res2 = await compileAndRunCpp({
+      files: {
+        'src/main.cpp': mainWithCin,
+      },
+      standard: 'c++17',
+      stdin: 'Alice',
+      compiledWasm: res1.compiledWasm,
+      onStdout: (text) => { stdout2 += text; },
+      onStderr: () => {},
+    });
+
+    expect(res2.exitCode).toBe(0);
+    expect(res2.requiresStdin).toBeUndefined();
+    expect(stdout2).toBe('Enter name: Hello, Alice!\n');
+  }, 30000);
 });
