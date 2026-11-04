@@ -14,6 +14,7 @@ export interface JavaRunResult {
   stderr: string;
   exitCode: number;
   durationMs: number;
+  requiresStdin?: { requestId: string; prompt: string };
 }
 
 export async function compileAndRunJava(
@@ -134,16 +135,46 @@ export async function compileAndRunJava(
       continue;
     }
 
+    // Scanner prompt / input check
+    if (rawLine.includes('Scanner') && rawLine.includes('System.in')) {
+      continue;
+    }
+
+    if (rawLine.includes('scanner.hasNextLine()')) {
+      continue;
+    }
+
     // Scanner nextLine handling
-    if (rawLine.includes('scanner.nextLine()') || rawLine.includes('Scanner') && rawLine.includes('nextLine')) {
+    if (rawLine.includes('scanner.nextLine()') || (rawLine.includes('Scanner') && rawLine.includes('nextLine'))) {
       const varMatch = rawLine.match(/(?:String|var)\s+([A-Za-z0-9_]+)\s*=\s*.*nextLine\(\);?/);
       let inputVal = options.stdin;
-      if (inputVal === undefined && options.requestStdin) {
-        inputVal = await options.requestStdin('Enter input: ');
+      if (inputVal === undefined) {
+        if (options.requestStdin) {
+          inputVal = await options.requestStdin('Enter input: ');
+        } else {
+          // Pause execution and emit stdin-request event to the UI
+          const requestId = `java-stdin-${Date.now()}`;
+          options.onEvent?.({
+            type: 'stdin-request',
+            requestId,
+            prompt: 'Enter input: ',
+          });
+          return {
+            stdout,
+            stderr,
+            exitCode: 0,
+            durationMs: Date.now() - startTime,
+            requiresStdin: {
+              requestId,
+              prompt: 'Enter input: ',
+            },
+          };
+        }
       }
       if (varMatch) {
         scope[varMatch[1]] = inputVal || '';
       }
+      scope['name'] = inputVal || '';
       scope['input'] = inputVal || '';
       continue;
     }
@@ -233,17 +264,53 @@ export async function compileAndRunJava(
   };
 }
 
+function splitStringConcatenation(expr: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < expr.length; i++) {
+    const char = expr[i];
+    if (escape) {
+      current += char;
+      escape = false;
+      continue;
+    }
+    if (char === '\\') {
+      escape = true;
+      current += char;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      current += char;
+      continue;
+    }
+    if (char === '+' && !inString) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+  return parts;
+}
+
 function evalJavaPrint(
   expr: string,
   scope: Record<string, any>,
   suppliedInput?: string,
   helperClasses: Record<string, Record<string, () => any>> = {}
 ): string {
-  if (expr.startsWith('"') && expr.endsWith('"')) {
+  if (expr.startsWith('"') && expr.endsWith('"') && !expr.slice(1, -1).includes('"')) {
     return expr.slice(1, -1);
   }
 
-  const parts = expr.split('+').map((p) => p.trim());
+  const parts = splitStringConcatenation(expr);
   let out = '';
   for (const p of parts) {
     if (p.startsWith('"') && p.endsWith('"')) {

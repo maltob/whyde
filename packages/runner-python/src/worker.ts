@@ -57,11 +57,15 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         },
       });
 
+      const lines = request.stdin !== undefined && request.stdin !== '' ? request.stdin.split('\n') : [];
       pyodide.setStdin({
         isatty: true,
         stdin: () => {
           if (stdinQueue.length > 0) {
             return stdinQueue.shift() ?? '';
+          }
+          if (lines.length > 0) {
+            return lines.shift() ?? '';
           }
           return '';
         },

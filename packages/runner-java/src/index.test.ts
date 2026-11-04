@@ -125,4 +125,55 @@ public class Broken {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Java Syntax Error in Broken.java');
   });
+
+  it('pauses and requests stdin interactively when Scanner input is encountered', async () => {
+    const starterJavaCode = `
+package demo;
+
+import java.util.Scanner;
+
+public final class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello from Java 11+!");
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter your name: ");
+        if (scanner.hasNextLine()) {
+            String name = scanner.nextLine();
+            System.out.println("Hi " + name + "!");
+        }
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-interactive-test',
+      name: 'Java Interactive Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: starterJavaCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // First execution without stdin should pause and request stdin
+    const events: RuntimeEvent[] = [];
+    const step1 = await compileAndRunJava(project, {
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(step1.requiresStdin).toBeDefined();
+    expect(events.some((e) => e.type === 'stdin-request')).toBe(true);
+    expect(step1.stdout).toContain('Hello from Java 11+!\nEnter your name: ');
+    expect(step1.stdout).not.toContain('Hi ');
+
+    // Second execution with supplied stdin completes execution
+    const step2 = await compileAndRunJava(project, {
+      stdin: 'Alice',
+    });
+
+    expect(step2.requiresStdin).toBeUndefined();
+    expect(step2.exitCode).toBe(0);
+    expect(step2.stdout).toContain('Hi Alice!');
+  });
 });

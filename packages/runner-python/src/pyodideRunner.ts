@@ -47,6 +47,7 @@ export interface PythonExecutionOptions {
   onEvent?: (event: RuntimeEvent) => void;
   maxRunTimeMs?: number;
   indexURL?: string;
+  requestStdin?: (prompt: string) => Promise<string>;
 }
 
 export async function executePythonInPyodide(
@@ -95,19 +96,21 @@ export async function executePythonInPyodide(
     },
   });
 
-  // Stdin handling if provided
-  if (options.stdin !== undefined) {
-    const lines = options.stdin.split('\n');
-    pyodide.setStdin({
-      isatty: true,
-      stdin: () => {
-        if (lines.length > 0) {
-          return lines.shift() ?? '';
-        }
-        return '';
-      },
-    });
-  }
+  // Stdin handling
+  const lines = options.stdin !== undefined && options.stdin !== '' ? options.stdin.split('\n') : [];
+  pyodide.setStdin({
+    isatty: true,
+    stdin: () => {
+      if (lines.length > 0) {
+        return lines.shift() ?? '';
+      }
+      if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+        const res = window.prompt('Enter standard input:');
+        return res !== null ? res : '';
+      }
+      return '';
+    },
+  });
 
   // Mount/write project files to Pyodide FS
   for (const file of project.files) {

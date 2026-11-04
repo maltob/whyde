@@ -211,8 +211,9 @@ export const App: React.FC = () => {
 
     if (project.language === 'java') {
       compileAndRunJava(project, {
-        stdin: suppliedInputs.join('\n'),
+        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
         onStdout: (text) => {
+          lastOutputLengthRef.current += text.length;
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
         },
         onStderr: (text) => {
@@ -228,11 +229,18 @@ export const App: React.FC = () => {
         },
       }).then(
         (res) => {
-          setLogs((prev) => [
-            ...prev,
-            { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
-          ]);
-          setIsRunning(false);
+          if (res.requiresStdin) {
+            setPendingStdin({
+              requestId: res.requiresStdin.requestId,
+              prompt: res.requiresStdin.prompt || 'Enter input: ',
+            });
+          } else {
+            setLogs((prev) => [
+              ...prev,
+              { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+            ]);
+            setIsRunning(false);
+          }
         },
         (err) => {
           setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
@@ -283,6 +291,54 @@ export const App: React.FC = () => {
   const handleSupplyStdin = (requestId: string, input: string) => {
     const nextInputs = [...suppliedInputs, input];
     setSuppliedInputs(nextInputs);
+
+    if (project.language === 'java') {
+      let runOutput = '';
+      compileAndRunJava(project, {
+        stdin: nextInputs.join('\n'),
+        onStdout: (text) => {
+          runOutput += text;
+        },
+        onStderr: (text) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+        onEvent: (event) => {
+          if (event.type === 'stdin-request') {
+            setPendingStdin({
+              requestId: event.requestId,
+              prompt: event.prompt || 'Enter input: ',
+            });
+          }
+        },
+      }).then(
+        (res) => {
+          const newSegment = runOutput.slice(lastOutputLengthRef.current);
+          lastOutputLengthRef.current = runOutput.length;
+          if (newSegment) {
+            setLogs((prev) => [...prev, { type: 'stdout', text: newSegment }]);
+          }
+
+          if (res.requiresStdin) {
+            setPendingStdin({
+              requestId: res.requiresStdin.requestId,
+              prompt: res.requiresStdin.prompt || 'Enter input: ',
+            });
+          } else {
+            setLogs((prev) => [
+              ...prev,
+              { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+            ]);
+            setPendingStdin(null);
+            setIsRunning(false);
+          }
+        },
+        (err) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setIsRunning(false);
+        }
+      );
+      return;
+    }
 
     // Resume execution with the supplied inputs
     const result = executeClientSideCode(
