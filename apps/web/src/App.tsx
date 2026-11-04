@@ -10,6 +10,7 @@ import { STARTER_PROJECTS, BLANK_PROJECTS } from './templates.js';
 import { executeClientSideCode } from './clientExecutor.js';
 import { executePythonInPyodide } from '@ide/runner-python';
 import { compileAndRunCpp } from '@ide/runner-cpp';
+import { compileAndRunJava } from '@ide/runner-java';
 import { parseUrlHash, setUrlHash } from './hashParams.js';
 
 const repo = new IndexedDbProjectRepository();
@@ -191,6 +192,39 @@ export const App: React.FC = () => {
         },
         onStderr: (text) => {
           setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+      }).then(
+        (res) => {
+          setLogs((prev) => [
+            ...prev,
+            { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+          ]);
+          setIsRunning(false);
+        },
+        (err) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setIsRunning(false);
+        }
+      );
+      return;
+    }
+
+    if (project.language === 'java') {
+      compileAndRunJava(project, {
+        stdin: suppliedInputs.join('\n'),
+        onStdout: (text) => {
+          setLogs((prev) => [...prev, { type: 'stdout', text }]);
+        },
+        onStderr: (text) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+        onEvent: (event) => {
+          if (event.type === 'stdin-request') {
+            setPendingStdin({
+              requestId: event.requestId,
+              prompt: event.prompt || 'Enter input: ',
+            });
+          }
         },
       }).then(
         (res) => {
