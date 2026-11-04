@@ -467,4 +467,91 @@ public class Main {
     expect(res.stdout).toContain('Short 40000: -25536\n');
     expect(res.stdout).toContain('Cast string: Hello from Object\n');
   });
+
+  it('supports user-defined recursive methods, switch statements, try/catch/finally, and virtual file I/O', async () => {
+    const advancedCode = `
+package demo;
+
+import java.io.File;
+
+public class Main {
+    public static int fib(int n) {
+        if (n <= 1) return n;
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    public static int gcd(int a, int b) {
+        if (b == 0) return a;
+        return gcd(b, a % b);
+    }
+
+    public static void main(String[] args) {
+        // 1. Recursive methods
+        System.out.println("Fib 8: " + fib(8));
+        System.out.println("GCD 48 18: " + gcd(48, 18));
+
+        // 2. Switch statement
+        int day = 3;
+        switch (day) {
+            case 1:
+                System.out.println("Monday");
+                break;
+            case 2:
+                System.out.println("Tuesday");
+                break;
+            case 3:
+                System.out.println("Wednesday");
+                break;
+            default:
+                System.out.println("Other day");
+                break;
+        }
+
+        // 3. Try / catch / finally
+        try {
+            System.out.println("In try");
+            throw new RuntimeException("Test Exception Occurred");
+        } catch (Exception e) {
+            System.out.println("Caught: " + e);
+        } finally {
+            System.out.println("In finally");
+        }
+
+        // 4. Virtual File I/O
+        File sampleFile = new File("src/demo/input.txt");
+        System.out.println("File exists: " + sampleFile.exists());
+        System.out.println("File name: " + sampleFile.getName());
+        System.out.println("File length: " + sampleFile.length());
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-advanced-features-test',
+      name: 'Java Advanced Features Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [
+        { path: 'src/demo/Main.java', encoding: 'utf-8', content: advancedCode },
+        { path: 'src/demo/input.txt', encoding: 'utf-8', content: 'Virtual File System data payload.' },
+      ],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await compileAndRunJava(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Fib 8: 21\n');
+    expect(res.stdout).toContain('GCD 48 18: 6\n');
+    expect(res.stdout).toContain('Wednesday\n');
+    expect(res.stdout).not.toContain('Monday\n');
+    expect(res.stdout).not.toContain('Tuesday\n');
+    expect(res.stdout).toContain('In try\n');
+    expect(res.stdout).toContain('Caught: Test Exception Occurred\n');
+    expect(res.stdout).toContain('In finally\n');
+    expect(res.stdout).toContain('File exists: true\n');
+    expect(res.stdout).toContain('File name: input.txt\n');
+    expect(res.stdout).toContain('File length: 33\n');
+  });
 });

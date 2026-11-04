@@ -476,8 +476,15 @@ function evalJavaExpr(
     return [];
   }
 
-  // Convert .length() to .length for strings & arrays
-  clean = clean.replace(/\.length\(\)/g, '.length');
+  // Convert .length() to .length for strings & arrays only if not an object with a length() method
+  // Don't replace if it's called as a method on instances that might define length()
+  // In JS, String.length and Array.length are properties, but File.length() is a method!
+  clean = clean.replace(/([A-Za-z0-9_.]+(?:\[[^\]]+\])?)\.length\(\)/g, (match, target) => {
+    if (scope[target] && typeof scope[target].length === 'function') {
+      return `${target}.length()`;
+    }
+    return `${target}.length`;
+  });
 
   // Inject helper classes, e.g. Helper.greet()
   for (const [cls, methods] of Object.entries(helperClasses)) {
@@ -547,7 +554,7 @@ function evalJavaExpr(
 }
 
 interface ASTNode {
-  type: 'stmt' | 'if' | 'while' | 'for' | 'for-each';
+  type: 'stmt' | 'if' | 'while' | 'for' | 'for-each' | 'switch' | 'try';
   line?: string;
   cond?: string;
   init?: string;
@@ -557,6 +564,13 @@ interface ASTNode {
   body?: ASTNode[];
   elseIfs?: { cond: string; body: ASTNode[] }[];
   elseBody?: ASTNode[];
+  // Switch support
+  switchExpr?: string;
+  switchCases?: { val: string; body: ASTNode[] }[];
+  // Try / catch / finally support
+  tryBody?: ASTNode[];
+  catches?: { errVar: string; body: ASTNode[] }[];
+  finallyBody?: ASTNode[];
 }
 
 function parseBlocks(rawLines: string[]): ASTNode[] {
@@ -572,8 +586,85 @@ function parseBlocks(rawLines: string[]): ASTNode[] {
         continue;
       }
 
-      if (stopAtBrace && (line === '}' || line.startsWith('}'))) {
+      if (
+        stopAtBrace &&
+        (line === '}' ||
+          line.startsWith('}') ||
+          line.startsWith('} catch') ||
+          line.startsWith('}catch') ||
+          line.startsWith('} finally') ||
+          line.startsWith('}finally') ||
+          line.startsWith('} else') ||
+          line.startsWith('}else'))
+      ) {
         break;
+      }
+
+      // try { ... } catch (...) { ... } finally { ... }
+      if (line === 'try' || line.startsWith('try ') || line.startsWith('try{')) {
+        i++;
+        const tryBody = parseSequence(true);
+        if (i < rawLines.length && rawLines[i].trim().startsWith('}')) {
+          if (rawLines[i].trim() === '}') i++;
+        }
+
+        const catches: { errVar: string; body: ASTNode[] }[] = [];
+        let finallyBody: ASTNode[] | undefined = undefined;
+
+        while (i < rawLines.length) {
+          const next = rawLines[i].trim();
+          if (next.startsWith('catch') || next.startsWith('} catch') || next.startsWith('}catch')) {
+            const catchMatch = next.match(/catch\s*\((?:[A-Za-z0-9_<>[\]]+\s+)?([A-Za-z0-9_]+)\)\s*\{?$/);
+            const errVar = catchMatch ? catchMatch[1] : 'e';
+            i++;
+            const cBody = parseSequence(true);
+            if (i < rawLines.length && rawLines[i].trim().startsWith('}')) {
+              if (rawLines[i].trim() === '}') i++;
+            }
+            catches.push({ errVar, body: cBody });
+          } else if (next.startsWith('finally') || next.startsWith('} finally') || next.startsWith('}finally')) {
+            i++;
+            finallyBody = parseSequence(true);
+            if (i < rawLines.length && rawLines[i].trim().startsWith('}')) {
+              if (rawLines[i].trim() === '}') i++;
+            }
+            break;
+          } else {
+            break;
+          }
+        }
+        nodes.push({ type: 'try', tryBody, catches, finallyBody });
+        continue;
+      }
+
+      // switch (expr) { case ...: default: ... }
+      const switchMatch = line.match(/^switch\s*\(([\s\S]*)\)\s*\{?$/);
+      if (switchMatch) {
+        const switchExpr = switchMatch[1];
+        i++;
+        const switchCases: { val: string; body: ASTNode[] }[] = [];
+        let curCase: { val: string; body: ASTNode[] } | null = null;
+        while (i < rawLines.length) {
+          const sLine = rawLines[i].trim();
+          if (sLine === '}' || sLine.startsWith('}')) {
+            i++;
+            break;
+          }
+          const caseMatch = sLine.match(/^(?:case\s+([^:]+)|default)\s*:/);
+          if (caseMatch) {
+            const caseVal = caseMatch[1] ? caseMatch[1].trim() : 'default';
+            curCase = { val: caseVal, body: [] };
+            switchCases.push(curCase);
+            i++;
+            continue;
+          }
+          if (curCase) {
+            curCase.body.push({ type: 'stmt', line: sLine });
+          }
+          i++;
+        }
+        nodes.push({ type: 'switch', switchExpr, switchCases });
+        continue;
       }
 
       // If statement: if (cond) { ... }
@@ -729,7 +820,155 @@ export async function compileAndRunJava(
     };
   }
 
-  // 2. Scan helper classes & static methods across multi-file project
+  // 2. Virtual File System emulation for java.io.File, Scanner(File), etc.
+  const fileMap = new Map<string, string>();
+  for (const f of project.files) {
+    fileMap.set(f.path, f.content);
+    const base = f.path.split('/').pop()?.split('\\').pop();
+    if (base && !fileMap.has(base)) {
+      fileMap.set(base, f.content);
+    }
+  }
+
+  const getVirtualContent = (filePath: string): string | null => {
+    if (fileMap.has(filePath)) return fileMap.get(filePath)!;
+    const base = filePath.split('/').pop()?.split('\\').pop();
+    if (base && fileMap.has(base)) return fileMap.get(base)!;
+    return null;
+  };
+
+  class JavaFile {
+    path: string;
+    constructor(filePath: string) {
+      this.path = filePath;
+    }
+    exists(): boolean {
+      return getVirtualContent(this.path) !== null;
+    }
+    getName(): string {
+      return this.path.split('/').pop()?.split('\\').pop() || this.path;
+    }
+    getPath(): string {
+      return this.path;
+    }
+    length(): number {
+      const c = getVirtualContent(this.path);
+      return c !== null ? c.length : 0;
+    }
+    toString(): string {
+      return this.path;
+    }
+  }
+
+  // 3. Scan user-defined static methods across all files in project
+  const userMethods: Record<string, { returnType: string; paramNames: string[]; bodyStr: string }> = {};
+  const methodRegex = /(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*\{/g;
+
+  for (const f of project.files) {
+    if (!f.path.endsWith('.java')) continue;
+    const content = f.content;
+    let mMatch: RegExpExecArray | null;
+    while ((mMatch = methodRegex.exec(content)) !== null) {
+      const returnType = mMatch[1];
+      const methodName = mMatch[2];
+      const rawParams = mMatch[3];
+      if (methodName === 'main') continue;
+
+      const startIndex = mMatch.index + mMatch[0].length;
+      let depth = 1;
+      let endIndex = startIndex;
+      for (let ci = startIndex; ci < content.length; ci++) {
+        if (content[ci] === '{') depth++;
+        else if (content[ci] === '}') {
+          depth--;
+          if (depth === 0) {
+            endIndex = ci;
+            break;
+          }
+        }
+      }
+      const bodyStr = content.slice(startIndex, endIndex);
+      const paramNames = rawParams
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => p.split(/\s+/).pop()!);
+
+      userMethods[methodName] = { returnType, paramNames, bodyStr };
+    }
+  }
+
+  // Transpile method bodies to JS functions with mutual recursion
+  const transpileMethodBody = (bodyStr: string): string => {
+    const rawLines = bodyStr.split('\n');
+    const jsLines: string[] = [];
+    for (const raw of rawLines) {
+      let l = raw.trim();
+      if (!l || l.startsWith('//') || l.startsWith('/*') || l.startsWith('*')) continue;
+
+      const retMatch = l.match(/^return(?:\s+([\s\S]*))?;?$/);
+      if (retMatch) {
+        const expr = retMatch[1] ? retMatch[1].trim().replace(/;+$/, '') : '';
+        jsLines.push(`return ${expr || 'undefined'};`);
+        continue;
+      }
+
+      if (
+        l.startsWith('if ') ||
+        l.startsWith('if(') ||
+        l.startsWith('while ') ||
+        l.startsWith('while(') ||
+        l.startsWith('for ') ||
+        l.startsWith('for(') ||
+        l.startsWith('else') ||
+        l === '{' ||
+        l === '}'
+      ) {
+        l = l.replace(
+          /for\s*\(\s*(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*=/,
+          'for (let $1 ='
+        );
+        l = l.replace(
+          /for\s*\(\s*(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*:\s*([^)]+)\)/,
+          'for (const $1 of $2)'
+        );
+        jsLines.push(l);
+        continue;
+      }
+
+      const varDecl = l.match(
+        /^(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);?$/
+      );
+      if (varDecl) {
+        jsLines.push(`let ${varDecl[1]} = ${varDecl[2]};`);
+        continue;
+      }
+
+      jsLines.push(l);
+    }
+    return jsLines.join('\n');
+  };
+
+  const methodNames = Object.keys(userMethods);
+  const rawCompiledFns: Record<string, Function> = {};
+  for (const [mName, info] of Object.entries(userMethods)) {
+    const jsBody = transpileMethodBody(info.bodyStr);
+    try {
+      rawCompiledFns[mName] = new Function(...info.paramNames, ...methodNames, 'Math', jsBody);
+    } catch {
+      // Ignore compilation error on partial method
+    }
+  }
+
+  const boundUserMethods: Record<string, (...args: any[]) => any> = {};
+  for (const [mName, fn] of Object.entries(rawCompiledFns)) {
+    boundUserMethods[mName] = (...args: any[]) => {
+      const methodArgs = methodNames.map((name) => boundUserMethods[name]);
+      return fn(...args, ...methodArgs, Math);
+    };
+  }
+
+  // 4. Scan helper classes & static methods across multi-file project
   const helperClasses: Record<string, Record<string, (...args: any[]) => any>> = {};
   for (const f of project.files) {
     if (f.path.endsWith('.java')) {
@@ -752,6 +991,8 @@ export async function compileAndRunJava(
   // Scope tracking for local variables
   const scope: Record<string, any> = {
     args: [],
+    File: JavaFile,
+    ...boundUserMethods,
   };
 
   if (options.stdin !== undefined) {
@@ -1003,6 +1244,15 @@ export async function compileAndRunJava(
       return;
     }
 
+    // Explicit throw: throw new RuntimeException("...");
+    const throwMatch = rawLine.match(/^throw\s+new\s+[A-Za-z0-9_.]+\s*\(([\s\S]*)\)\s*;?$/);
+    if (throwMatch) {
+      const msg = throwMatch[1] ? String(evalJavaExpr(throwMatch[1], scope, helperClasses)) : 'Runtime Exception';
+      const err = new Error(msg);
+      (err as any).isJavaException = true;
+      throw err;
+    }
+
     // ArrayList add: list.add(val)
     const addMatch = rawLine.match(/([A-Za-z0-9_]+)\.add\(([^)]+)\);/);
     if (addMatch) {
@@ -1094,6 +1344,75 @@ export async function compileAndRunJava(
         for (const item of collection) {
           scope[node.varName!] = item;
           for (const child of node.body || []) {
+            const res = await executeNode(child);
+            if (res) return res;
+          }
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'switch') {
+      const evaluatedVal = evalJavaExpr(node.switchExpr!, scope, helperClasses);
+      let matched = false;
+      let defaultCase: { val: string; body: ASTNode[] } | null = null;
+
+      for (const sc of node.switchCases || []) {
+        if (sc.val === 'default') {
+          defaultCase = sc;
+          continue;
+        }
+        const caseVal = evalJavaExpr(sc.val, scope, helperClasses);
+        if (matched || caseVal === evaluatedVal) {
+          matched = true;
+          let hitBreak = false;
+          for (const child of sc.body) {
+            if (child.type === 'stmt' && child.line?.trim() === 'break;') {
+              hitBreak = true;
+              break;
+            }
+            const res = await executeNode(child);
+            if (res) return res;
+          }
+          if (hitBreak) break;
+        }
+      }
+
+      if (!matched && defaultCase) {
+        for (const child of defaultCase.body) {
+          if (child.type === 'stmt' && child.line?.trim() === 'break;') {
+            break;
+          }
+          const res = await executeNode(child);
+          if (res) return res;
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'try') {
+      try {
+        for (const child of node.tryBody || []) {
+          const res = await executeNode(child);
+          if (res) return res;
+        }
+      } catch (err: any) {
+        let caught = false;
+        if (node.catches && node.catches.length > 0) {
+          for (const c of node.catches) {
+            scope[c.errVar] = err?.message || String(err);
+            for (const child of c.body) {
+              const res = await executeNode(child);
+              if (res) return res;
+            }
+            caught = true;
+            break;
+          }
+        }
+        if (!caught) throw err;
+      } finally {
+        if (node.finallyBody) {
+          for (const child of node.finallyBody) {
             const res = await executeNode(child);
             if (res) return res;
           }
