@@ -255,7 +255,8 @@ export const App: React.FC = () => {
     autoSaveRef.current?.setInitialRevision(rev);
   };
 
-  const handleRun = () => {
+  const handleRun = async () => {
+    if (isRunning) return;
     setIsRunning(true);
     setExecutionPhase(project.language === 'cpp' ? 'compiling' : 'running');
     setSuppliedInputs([]);
@@ -264,6 +265,10 @@ export const App: React.FC = () => {
       ...prev,
       { type: 'info', text: `[Browser IDE] Compiling and running ${project.language} (${activeFile.path})...\n` },
     ]);
+
+    // Yield to the browser event loop so React flushes DOM updates and paints the animated "Compiling..." button
+    // before CPU-bound WebAssembly execution starts on the main thread.
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     if (project.language === 'python') {
       executePythonInPyodide(project, {
