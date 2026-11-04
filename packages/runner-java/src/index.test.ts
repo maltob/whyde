@@ -229,4 +229,57 @@ public final class Main {
     expect(step3.exitCode).toBe(0);
     expect(step3.stdout).toBe('Hello from Java 11+!\nEnter your name: Hi qwe!\nHi res!\n');
   });
+
+  it('handles Boolean nextBoolean() with b.toString() and subsequent nextLine()', async () => {
+    const code = `
+package demo;
+
+import java.util.Scanner;
+
+public final class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello from Java 11+!");
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter youdame: ");
+        if (scanner.hasNextLine()) {
+            Boolean b= scanner.nextBoolean();
+            System.out.println("Hi " + b.toString()+ "!");
+            String name = scanner.nextLine();
+            System.out.println("Hi " + name + "!");
+        }
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-boolean-scanner-test',
+      name: 'Java Boolean Scanner Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: code }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Step 1: Pauses at scanner.nextBoolean()
+    const step1 = await compileAndRunJava(project);
+    expect(step1.requiresStdin).toBeDefined();
+    expect(step1.stdout).toBe('Hello from Java 11+!\nEnter youdame: ');
+
+    // Step 2: Supply "true" -> nextBoolean consumes true, prints "Hi true!\n", pauses at scanner.nextLine()
+    const step2 = await compileAndRunJava(project, {
+      stdin: 'true',
+    });
+    expect(step2.requiresStdin).toBeDefined();
+    expect(step2.stdout).toBe('Hello from Java 11+!\nEnter youdame: Hi true!\n');
+
+    // Step 3: Supply "true\nAlice" -> prints both, completes with exit code 0
+    const step3 = await compileAndRunJava(project, {
+      stdin: 'true\nAlice',
+    });
+    expect(step3.requiresStdin).toBeUndefined();
+    expect(step3.exitCode).toBe(0);
+    expect(step3.stdout).toBe('Hello from Java 11+!\nEnter youdame: Hi true!\nHi Alice!\n');
+  });
 });

@@ -195,9 +195,9 @@ export async function compileAndRunJava(
       continue;
     }
 
-    // Scanner input reads: String name = scanner.nextLine(); name = scanner.nextLine(); int age = scanner.nextInt(); etc.
+    // Scanner input reads: Boolean b= scanner.nextBoolean(); String name = scanner.nextLine(); int age = scanner.nextInt(); etc.
     const scannerCallMatch = rawLine.match(
-      /(?:(?:(?:String|var|int|double|float|long)\s+)?([A-Za-z0-9_]+)\s*=\s*)?.*scanner\.(nextLine|next|nextInt|nextDouble|nextLong|nextFloat)\s*\(\)\s*;?/
+      /(?:(?:[A-Za-z0-9_<>[\]]+\s+)?([A-Za-z0-9_]+)\s*=\s*)?.*scanner\.(next[A-Za-z]*)\s*\(\)\s*;?/
     );
     if (scannerCallMatch && !rawLine.startsWith('System.out')) {
       const varName = scannerCallMatch[1];
@@ -231,7 +231,10 @@ export async function compileAndRunJava(
       }
 
       let parsedVal: any = rawVal;
-      if (method === 'nextInt' || method === 'nextLong') {
+      if (method === 'nextBoolean') {
+        const lower = rawVal.trim().toLowerCase();
+        parsedVal = lower === 'true' || lower === '1' || lower === 't';
+      } else if (method === 'nextInt' || method === 'nextLong' || method === 'nextShort' || method === 'nextByte') {
         const num = parseInt(rawVal.trim(), 10);
         parsedVal = isNaN(num) ? 0 : num;
       } else if (method === 'nextDouble' || method === 'nextFloat') {
@@ -322,8 +325,8 @@ export async function compileAndRunJava(
       continue;
     }
 
-    // Variable assignment: int x = 42; var msg = "Hello"; x = 99;
-    const assignMatch = rawLine.match(/(?:(?:int|String|double|boolean|var)\s+)?([A-Za-z0-9_]+)\s*=\s*([^;]+);/);
+    // Variable assignment: int x = 42; Boolean b = true; var msg = "Hello"; x = 99;
+    const assignMatch = rawLine.match(/(?:(?:[A-Za-z0-9_<>[\]]+)\s+)?([A-Za-z0-9_]+)\s*=\s*([^;]+);/);
     if (assignMatch) {
       const varName = assignMatch[1];
       const valExpr = assignMatch[2].trim();
@@ -336,6 +339,9 @@ export async function compileAndRunJava(
           scope[varName] = true;
         } else if (valExpr === 'false') {
           scope[varName] = false;
+        } else if (valExpr.endsWith('.toString()')) {
+          const innerVar = valExpr.slice(0, -'.toString()'.length).trim();
+          scope[varName] = scope[innerVar] !== undefined ? String(scope[innerVar]) : valExpr;
         } else if (scope[valExpr] !== undefined) {
           scope[varName] = scope[valExpr];
         }
@@ -406,9 +412,49 @@ function evalJavaPrint(
       out += p.slice(1, -1);
     } else if (scope[p] !== undefined) {
       out += String(scope[p]);
-    } else if ((p === 'name' || p === 'input' || p === 'scanner.nextLine()') && suppliedInput) {
-      out += suppliedInput;
     } else {
+      // Check for method calls on variables, e.g. b.toString(), b.booleanValue(), str.trim(), etc.
+      const dotMethodMatch = p.match(/^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\s*\(\)$/);
+      if (dotMethodMatch && scope[dotMethodMatch[1]] !== undefined) {
+        const val = scope[dotMethodMatch[1]];
+        const method = dotMethodMatch[2];
+        if (method === 'toString') {
+          out += String(val);
+          continue;
+        } else if (method === 'booleanValue') {
+          out += String(Boolean(val));
+          continue;
+        } else if (method === 'intValue' || method === 'longValue') {
+          out += String(Math.floor(Number(val)));
+          continue;
+        } else if (method === 'doubleValue' || method === 'floatValue') {
+          out += String(Number(val));
+          continue;
+        } else if (method === 'toLowerCase' && typeof val === 'string') {
+          out += val.toLowerCase();
+          continue;
+        } else if (method === 'toUpperCase' && typeof val === 'string') {
+          out += val.toUpperCase();
+          continue;
+        } else if (method === 'trim' && typeof val === 'string') {
+          out += val.trim();
+          continue;
+        } else if (method === 'length') {
+          out += String(val.length);
+          continue;
+        }
+      }
+
+      // Check for static wrapper calls, e.g. Boolean.toString(b), String.valueOf(b)
+      const staticWrapperMatch = p.match(/^(?:Boolean|Integer|Double|Float|Long|String)\.(?:toString|valueOf)\(([^)]+)\)$/);
+      if (staticWrapperMatch) {
+        const arg = staticWrapperMatch[1].trim();
+        if (scope[arg] !== undefined) {
+          out += String(scope[arg]);
+          continue;
+        }
+      }
+
       let foundHelper = false;
       for (const [cls, methods] of Object.entries(helperClasses)) {
         for (const [mName, mFunc] of Object.entries(methods)) {
