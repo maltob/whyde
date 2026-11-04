@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ProjectFile } from '@ide/project-model';
 import {
   Folder,
@@ -10,6 +10,9 @@ import {
   ChevronRight,
   ChevronDown,
   Trash2,
+  Edit2,
+  Copy,
+  CornerUpLeft,
 } from 'lucide-react';
 
 interface FileTreeProps {
@@ -18,6 +21,9 @@ interface FileTreeProps {
   onSelectFile: (path: string) => void;
   onAddFile: (path: string) => void;
   onDeleteFile: (path: string) => void;
+  onRenameFile?: (oldPath: string, newPath: string) => void;
+  onMoveFile?: (sourcePath: string, targetDirPath: string) => void;
+  onDuplicateFile?: (path: string) => void;
 }
 
 interface TreeNode {
@@ -74,7 +80,6 @@ function getFileIcon(name: string, isActive: boolean) {
 
   switch (ext) {
     case 'py':
-      // Python (Golden/Yellow with snake badge)
       return (
         <span
           style={{
@@ -99,31 +104,6 @@ function getFileIcon(name: string, isActive: boolean) {
     case 'cpp':
     case 'cc':
     case 'cxx':
-      // C++ (Vibrant Blue badge)
-      return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 16,
-            height: 16,
-            fontSize: '8px',
-            fontWeight: 800,
-            borderRadius: '3px',
-            backgroundColor: '#0284c7',
-            color: '#ffffff',
-            lineHeight: 1,
-            userSelect: 'none',
-          }}
-          title="C++"
-        >
-          C+
-        </span>
-      );
-    case 'hpp':
-    case 'h':
-      // C/C++ Header (Purple badge)
       return (
         <span
           style={{
@@ -135,18 +115,18 @@ function getFileIcon(name: string, isActive: boolean) {
             fontSize: '9px',
             fontWeight: 800,
             borderRadius: '3px',
-            backgroundColor: '#9333ea',
-            color: '#ffffff',
+            backgroundColor: '#38bdf8',
+            color: '#090d16',
             lineHeight: 1,
             userSelect: 'none',
           }}
-          title="C/C++ Header"
+          title="C++"
         >
-          H
+          C+
         </span>
       );
-    case 'java':
-      // Java (Orange/Red Coffee badge)
+    case 'hpp':
+    case 'h':
       return (
         <span
           style={{
@@ -155,10 +135,32 @@ function getFileIcon(name: string, isActive: boolean) {
             justifyContent: 'center',
             width: 16,
             height: 16,
-            fontSize: '8px',
+            fontSize: '9px',
             fontWeight: 800,
             borderRadius: '3px',
-            backgroundColor: '#ea580c',
+            backgroundColor: '#a855f7',
+            color: '#ffffff',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="Header"
+        >
+          H
+        </span>
+      );
+    case 'java':
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '9px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#f97316',
             color: '#ffffff',
             lineHeight: 1,
             userSelect: 'none',
@@ -177,11 +179,11 @@ function getFileIcon(name: string, isActive: boolean) {
             justifyContent: 'center',
             width: 16,
             height: 16,
-            fontSize: '8px',
+            fontSize: '9px',
             fontWeight: 800,
             borderRadius: '3px',
-            backgroundColor: '#eab308',
-            color: '#1e293b',
+            backgroundColor: '#10b981',
+            color: '#ffffff',
             lineHeight: 1,
             userSelect: 'none',
           }}
@@ -200,19 +202,67 @@ function getFileIcon(name: string, isActive: boolean) {
   }
 }
 
+interface ContextMenuState {
+  x: number;
+  y: number;
+  path: string;
+  name: string;
+  isFolder: boolean;
+}
+
 export const FileTree: React.FC<FileTreeProps> = ({
   files,
   activeFile,
   onSelectFile,
   onAddFile,
   onDeleteFile,
+  onRenameFile,
+  onMoveFile,
+  onDuplicateFile,
 }) => {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [createType, setCreateType] = useState<'file' | 'folder'>('file');
   const [newItemName, setNewItemName] = useState('');
+  const [createParentDir, setCreateParentDir] = useState<string>('');
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  // Renaming State
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState<string>('');
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Drag & Drop State
+  const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
+
+  // Close context menu on external click or Escape key
+  useEffect(() => {
+    const handleClose = () => setContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null);
+        setRenamingPath(null);
+      }
+    };
+    window.addEventListener('click', handleClose);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (renamingPath && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingPath]);
 
   const toggleFolder = (folderPath: string) => {
     setCollapsedFolders((prev) => ({
@@ -226,26 +276,106 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const cleanName = newItemName.trim().replace(/^[/\\]+/, '');
     if (!cleanName) {
       setIsCreating(false);
+      setCreateParentDir('');
       return;
     }
-    const finalPath = createType === 'folder' ? `${cleanName}/.keep` : cleanName;
+    const fullPrefix = createParentDir ? `${createParentDir.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '')}/` : '';
+    const finalPath = createType === 'folder' ? `${fullPrefix}${cleanName}/.keep` : `${fullPrefix}${cleanName}`;
     onAddFile(finalPath);
     setNewItemName('');
     setIsCreating(false);
+    setCreateParentDir('');
+  };
+
+  const handleRenameSubmit = (e: React.FormEvent, oldPath: string) => {
+    e.preventDefault();
+    const cleanNewName = renameInput.trim().replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+    if (!cleanNewName) {
+      setRenamingPath(null);
+      return;
+    }
+
+    const parts = oldPath.split('/');
+    parts[parts.length - 1] = cleanNewName;
+    const newPath = parts.join('/');
+
+    if (newPath !== oldPath) {
+      onRenameFile?.(oldPath, newPath);
+    }
+    setRenamingPath(null);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, path: string, name: string, isFolder: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: Math.min(e.clientX, window.innerWidth - 180),
+      y: Math.min(e.clientY, window.innerHeight - 200),
+      path,
+      name,
+      isFolder,
+    });
+  };
+
+  const startRename = (path: string, currentName: string) => {
+    setRenamingPath(path);
+    setRenameInput(currentName);
+    setContextMenu(null);
   };
 
   const renderTree = (node: TreeNode, depth: number = 0) => {
     return node.children.map((child) => {
       const paddingLeft = `${12 + depth * 14}px`;
+      const isRenaming = renamingPath === child.path;
+      const isDragTarget = dragOverPath === child.path;
 
       if (child.isFolder) {
         const isCollapsed = collapsedFolders[child.path] ?? false;
         return (
-          <div key={child.path}>
+          <div
+            key={child.path}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.dataTransfer.dropEffect = 'move';
+              if (draggedPath && draggedPath !== child.path && !child.path.startsWith(draggedPath + '/')) {
+                setDragOverPath(child.path);
+              }
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget === e.target) {
+                setDragOverPath((p) => (p === child.path ? null : p));
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragOverPath(null);
+              const src = e.dataTransfer.getData('text/plain');
+              if (src && src !== child.path && !child.path.startsWith(src + '/')) {
+                onMoveFile?.(src, child.path);
+              }
+            }}
+            style={{
+              outline: isDragTarget ? '1px dashed #38bdf8' : 'none',
+              backgroundColor: isDragTarget ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+            }}
+          >
             <div
               role="button"
               tabIndex={0}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', child.path);
+                e.dataTransfer.effectAllowed = 'move';
+                setDraggedPath(child.path);
+              }}
+              onDragEnd={() => {
+                setDraggedPath(null);
+                setDragOverPath(null);
+              }}
               onClick={() => toggleFolder(child.path)}
+              onContextMenu={(e) => handleContextMenu(e, child.path, child.name, true)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -262,7 +392,33 @@ export const FileTree: React.FC<FileTreeProps> = ({
             >
               {isCollapsed ? <ChevronRight size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
               {isCollapsed ? <Folder size={15} color="#38bdf8" /> : <FolderOpen size={15} color="#38bdf8" />}
-              <span style={{ fontWeight: 500 }}>{child.name}</span>
+              {isRenaming ? (
+                <form
+                  onSubmit={(e) => handleRenameSubmit(e, child.path)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ display: 'inline-flex', flex: 1 }}
+                >
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameInput}
+                    onChange={(e) => setRenameInput(e.target.value)}
+                    onBlur={(e) => handleRenameSubmit(e, child.path)}
+                    style={{
+                      width: '100%',
+                      padding: '1px 4px',
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #38bdf8',
+                      borderRadius: '2px',
+                      color: '#f8fafc',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                    }}
+                  />
+                </form>
+              ) : (
+                <span style={{ fontWeight: 500 }}>{child.name}</span>
+              )}
             </div>
             {!isCollapsed && renderTree(child, depth + 1)}
           </div>
@@ -278,7 +434,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
           key={child.path}
           role="button"
           tabIndex={0}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/plain', child.path);
+            e.dataTransfer.effectAllowed = 'move';
+            setDraggedPath(child.path);
+          }}
+          onDragEnd={() => {
+            setDraggedPath(null);
+            setDragOverPath(null);
+          }}
           onClick={() => onSelectFile(child.path)}
+          onContextMenu={(e) => handleContextMenu(e, child.path, child.name, false)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -299,15 +466,42 @@ export const FileTree: React.FC<FileTreeProps> = ({
             if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', flex: 1 }}>
             {getFileIcon(child.name, isActive)}
-            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              {child.name}
-            </span>
+            {isRenaming ? (
+              <form
+                onSubmit={(e) => handleRenameSubmit(e, child.path)}
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: 'inline-flex', flex: 1 }}
+              >
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  value={renameInput}
+                  onChange={(e) => setRenameInput(e.target.value)}
+                  onBlur={(e) => handleRenameSubmit(e, child.path)}
+                  style={{
+                    width: '100%',
+                    padding: '1px 4px',
+                    backgroundColor: '#0f172a',
+                    border: '1px solid #38bdf8',
+                    borderRadius: '2px',
+                    color: '#f8fafc',
+                    fontSize: '0.8rem',
+                    outline: 'none',
+                  }}
+                />
+              </form>
+            ) : (
+              <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {child.name}
+              </span>
+            )}
           </div>
-          {files.length > 1 && (
+          {files.length > 1 && !isRenaming && (
             <button
               aria-label={`Delete ${child.path}`}
+              title="Delete"
               onClick={(e) => {
                 e.stopPropagation();
                 if (confirm(`Delete ${child.path}?`)) {
@@ -334,9 +528,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
     });
   };
 
+  const isRootDragOver = dragOverPath === '__ROOT__';
+
   return (
     <nav
       aria-label="Project Files"
+      onContextMenu={(e) => {
+        // Right-clicking empty space in tree opens Root Context Menu
+        if (e.target === e.currentTarget || (e.target as HTMLElement).getAttribute('data-empty-drop-zone')) {
+          handleContextMenu(e, '', '', true);
+        }
+      }}
       style={{
         width: '240px',
         backgroundColor: '#090d16',
@@ -345,6 +547,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         flexDirection: 'column',
         borderRight: '1px solid #1e293b',
         userSelect: 'none',
+        position: 'relative',
       }}
     >
       <div
@@ -364,6 +567,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             title="New File"
             aria-label="New File"
             onClick={() => {
+              setCreateParentDir('');
               setCreateType('file');
               setIsCreating(true);
             }}
@@ -384,6 +588,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             title="New Folder"
             aria-label="New Folder"
             onClick={() => {
+              setCreateParentDir('');
               setCreateType('folder');
               setIsCreating(true);
             }}
@@ -408,10 +613,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
           <input
             autoFocus
             type="text"
-            placeholder={createType === 'folder' ? 'folder_name' : 'filename.txt'}
+            placeholder={
+              createType === 'folder'
+                ? createParentDir ? `${createParentDir}/folder` : 'folder_name'
+                : createParentDir ? `${createParentDir}/file.ext` : 'filename.txt'
+            }
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
-            onBlur={() => setIsCreating(false)}
+            onBlur={() => {
+              setIsCreating(false);
+              setCreateParentDir('');
+            }}
             style={{
               width: '100%',
               padding: '3px 6px',
@@ -429,6 +641,184 @@ export const FileTree: React.FC<FileTreeProps> = ({
       <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
         {renderTree(tree)}
       </div>
+
+      {/* Root Drop Zone: Dragging any file down here moves it out of its folder back to root */}
+      <div
+        data-empty-drop-zone="true"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (draggedPath && draggedPath.includes('/')) {
+            setDragOverPath('__ROOT__');
+          }
+        }}
+        onDragLeave={() => setDragOverPath(null)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOverPath(null);
+          const src = e.dataTransfer.getData('text/plain');
+          if (src && src.includes('/')) {
+            onMoveFile?.(src, '');
+          }
+        }}
+        style={{
+          minHeight: '40px',
+          padding: '8px',
+          margin: '4px 8px',
+          border: isRootDragOver ? '1px dashed #38bdf8' : '1px dashed transparent',
+          backgroundColor: isRootDragOver ? 'rgba(56, 189, 248, 0.08)' : 'transparent',
+          borderRadius: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.72rem',
+          color: isRootDragOver ? '#38bdf8' : '#475569',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        {isRootDragOver ? 'Drop here to move to Root' : ''}
+      </div>
+
+      {/* Right-Click Context Menu Popup */}
+      {contextMenu && (
+        <div
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 9999,
+            backgroundColor: '#0f172a',
+            border: '1px solid #334155',
+            borderRadius: '6px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+            padding: '4px 0',
+            minWidth: '160px',
+            fontSize: '0.8rem',
+            color: '#e2e8f0',
+          }}
+        >
+          {contextMenu.path && (
+            <button
+              onClick={() => startRename(contextMenu.path, contextMenu.name)}
+              style={menuItemStyle}
+              onMouseEnter={menuItemHover}
+              onMouseLeave={menuItemLeave}
+            >
+              <Edit2 size={13} color="#94a3b8" />
+              <span>Rename</span>
+            </button>
+          )}
+
+          {contextMenu.isFolder && (
+            <>
+              <button
+                onClick={() => {
+                  setCreateParentDir(contextMenu.path);
+                  setCreateType('file');
+                  setIsCreating(true);
+                  setContextMenu(null);
+                }}
+                style={menuItemStyle}
+                onMouseEnter={menuItemHover}
+                onMouseLeave={menuItemLeave}
+              >
+                <FilePlus size={13} color="#38bdf8" />
+                <span>New File Here</span>
+              </button>
+              <button
+                onClick={() => {
+                  setCreateParentDir(contextMenu.path);
+                  setCreateType('folder');
+                  setIsCreating(true);
+                  setContextMenu(null);
+                }}
+                style={menuItemStyle}
+                onMouseEnter={menuItemHover}
+                onMouseLeave={menuItemLeave}
+              >
+                <FolderPlus size={13} color="#38bdf8" />
+                <span>New Folder Here</span>
+              </button>
+            </>
+          )}
+
+          {!contextMenu.isFolder && contextMenu.path && onDuplicateFile && (
+            <button
+              onClick={() => {
+                onDuplicateFile(contextMenu.path);
+                setContextMenu(null);
+              }}
+              style={menuItemStyle}
+              onMouseEnter={menuItemHover}
+              onMouseLeave={menuItemLeave}
+            >
+              <Copy size={13} color="#94a3b8" />
+              <span>Duplicate</span>
+            </button>
+          )}
+
+          {contextMenu.path && contextMenu.path.includes('/') && onMoveFile && (
+            <button
+              onClick={() => {
+                onMoveFile(contextMenu.path, '');
+                setContextMenu(null);
+              }}
+              style={menuItemStyle}
+              onMouseEnter={menuItemHover}
+              onMouseLeave={menuItemLeave}
+            >
+              <CornerUpLeft size={13} color="#94a3b8" />
+              <span>Move to Root</span>
+            </button>
+          )}
+
+          {contextMenu.path && (
+            <div style={{ height: '1px', backgroundColor: '#1e293b', margin: '4px 0' }} />
+          )}
+
+          {contextMenu.path && files.length > 1 && (
+            <button
+              onClick={() => {
+                setContextMenu(null);
+                if (confirm(`Delete ${contextMenu.path}?`)) {
+                  onDeleteFile(contextMenu.path);
+                }
+              }}
+              style={{ ...menuItemStyle, color: '#f87171' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)')}
+              onMouseLeave={menuItemLeave}
+            >
+              <Trash2 size={13} color="#f87171" />
+              <span>Delete</span>
+            </button>
+          )}
+        </div>
+      )}
     </nav>
   );
+};
+
+const menuItemStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  width: '100%',
+  padding: '6px 12px',
+  background: 'none',
+  border: 'none',
+  color: '#e2e8f0',
+  cursor: 'pointer',
+  textAlign: 'left',
+  fontSize: '0.8rem',
+  transition: 'background-color 0.1s ease',
+};
+
+const menuItemHover = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.backgroundColor = '#1e293b';
+};
+
+const menuItemLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.backgroundColor = 'transparent';
 };

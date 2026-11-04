@@ -112,13 +112,99 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteFile = (path: string) => {
-    if (project.files.length <= 1) return;
-    const updatedFiles = project.files.filter((f) => f.path !== path);
+    const cleanPath = path.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+    const isFolder = !project.files.some((f) => f.path === cleanPath);
+    let updatedFiles: typeof project.files;
+    if (isFolder) {
+      updatedFiles = project.files.filter((f) => !f.path.startsWith(cleanPath + '/'));
+    } else {
+      updatedFiles = project.files.filter((f) => f.path !== cleanPath);
+    }
+    if (updatedFiles.length === 0) return;
     const updatedProj = { ...project, files: updatedFiles, updatedAt: new Date().toISOString() };
     setProject(updatedProj);
-    if (activeFilePath === path) {
+    if (!updatedFiles.some((f) => f.path === activeFilePath)) {
       setActiveFilePath(updatedFiles[0].path);
     }
+    autoSaveRef.current?.scheduleSave(updatedProj);
+  };
+
+  const handleRenameFile = (oldPath: string, newPath: string) => {
+    const cleanOld = oldPath.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+    const cleanNew = newPath.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+    if (!cleanNew || cleanOld === cleanNew) return;
+
+    if (project.files.some((f) => f.path === cleanNew)) {
+      alert(`A file with name "${cleanNew}" already exists.`);
+      return;
+    }
+
+    let activePathUpdated = activeFilePath;
+    const updatedFiles = project.files.map((f) => {
+      if (f.path === cleanOld) {
+        if (activeFilePath === cleanOld) {
+          activePathUpdated = cleanNew;
+        }
+        return { ...f, path: cleanNew };
+      }
+      if (f.path.startsWith(cleanOld + '/')) {
+        const subPath = f.path.slice(cleanOld.length);
+        const renamedSubPath = cleanNew + subPath;
+        if (activeFilePath === f.path) {
+          activePathUpdated = renamedSubPath;
+        }
+        return { ...f, path: renamedSubPath };
+      }
+      return f;
+    });
+
+    const updatedProj = { ...project, files: updatedFiles, updatedAt: new Date().toISOString() };
+    setProject(updatedProj);
+    if (activePathUpdated !== activeFilePath) {
+      setActiveFilePath(activePathUpdated);
+      setUrlHash({
+        lang: project.language,
+        file: activePathUpdated,
+        highlight: syntaxColoring,
+      });
+    }
+    autoSaveRef.current?.scheduleSave(updatedProj);
+  };
+
+  const handleMoveFile = (sourcePath: string, targetDirPath: string) => {
+    const cleanSource = sourcePath.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+    const cleanTargetDir = targetDirPath.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+
+    if (cleanTargetDir === cleanSource || cleanTargetDir.startsWith(cleanSource + '/')) {
+      return;
+    }
+
+    const fileName = cleanSource.split(/[/\\]+/).pop() || cleanSource;
+    const finalNewPath = cleanTargetDir ? `${cleanTargetDir}/${fileName}` : fileName;
+    if (finalNewPath === cleanSource) return;
+
+    handleRenameFile(cleanSource, finalNewPath);
+  };
+
+  const handleDuplicateFile = (path: string) => {
+    const file = project.files.find((f) => f.path === path);
+    if (!file) return;
+
+    const extMatch = path.match(/\.([^.]+)$/);
+    const ext = extMatch ? `.${extMatch[1]}` : '';
+    const base = extMatch ? path.slice(0, -ext.length) : path;
+
+    let copyPath = `${base}_copy${ext}`;
+    let counter = 1;
+    while (project.files.some((f) => f.path === copyPath)) {
+      counter++;
+      copyPath = `${base}_copy${counter}${ext}`;
+    }
+
+    const updatedFiles = [...project.files, { path: copyPath, encoding: 'utf-8' as const, content: file.content }];
+    const updatedProj = { ...project, files: updatedFiles, updatedAt: new Date().toISOString() };
+    setProject(updatedProj);
+    setActiveFilePath(copyPath);
     autoSaveRef.current?.scheduleSave(updatedProj);
   };
 
@@ -530,6 +616,9 @@ export const App: React.FC = () => {
           onSelectFile={handleSelectFile}
           onAddFile={handleAddFile}
           onDeleteFile={handleDeleteFile}
+          onRenameFile={handleRenameFile}
+          onMoveFile={handleMoveFile}
+          onDuplicateFile={handleDuplicateFile}
         />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <Editor
