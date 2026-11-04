@@ -282,4 +282,61 @@ public final class Main {
     expect(step3.exitCode).toBe(0);
     expect(step3.stdout).toBe('Hello from Java 11+!\nEnter youdame: Hi true!\nHi Alice!\n');
   });
+
+  it('executes Java standard library Math, String, Arrays, printf, and for-loops seamlessly', async () => {
+    const stdLibCode = `
+package demo;
+
+import java.util.Scanner;
+import java.util.Arrays;
+
+public class Main {
+    public static void main(String[] args) {
+        int a = 10;
+        int b = 20;
+        int c = a + b;
+        System.out.println("Sum: " + c);
+        System.out.println("Max: " + Math.max(a, b));
+        System.out.println("Sqrt: " + Math.sqrt(16));
+        String s = "Hello World";
+        System.out.println("Sub: " + s.substring(0, 5));
+        System.out.println("Len: " + s.length());
+        System.out.println("Eq: " + s.equals("Hello World"));
+        int[] arr = {1, 2, 3};
+        System.out.println("Arr: " + Arrays.toString(arr));
+        System.out.printf("Printf: %s scored %d (rate: %.2f)%n", "Alice", 95, 99.456);
+
+        int loopSum = 0;
+        for (int i = 1; i <= 5; i++) {
+            loopSum += i;
+        }
+        System.out.println("LoopSum: " + loopSum);
+        scanner.close();
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-stdlib-test',
+      name: 'Java StdLib Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: stdLibCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await compileAndRunJava(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Sum: 30\n');
+    expect(res.stdout).toContain('Max: 20\n');
+    expect(res.stdout).toContain('Sqrt: 4\n');
+    expect(res.stdout).toContain('Sub: Hello\n');
+    expect(res.stdout).toContain('Len: 11\n');
+    expect(res.stdout).toContain('Eq: true\n');
+    expect(res.stdout).toContain('Arr: [1, 2, 3]\n');
+    expect(res.stdout).toContain('Printf: Alice scored 95 (rate: 99.46)\n');
+    expect(res.stdout).toContain('LoopSum: 15\n');
+  });
 });

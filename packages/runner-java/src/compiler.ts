@@ -2,7 +2,7 @@ import { parse } from 'java-parser';
 import { Project, RuntimeEvent } from '@ide/execution-contracts';
 
 export interface JavaCompileAndRunOptions {
-  stdin?: string;
+  stdin?: string | string[];
   requestStdin?: (prompt: string) => Promise<string>;
   onStdout?: (text: string) => void;
   onStderr?: (text: string) => void;
@@ -15,6 +15,303 @@ export interface JavaRunResult {
   exitCode: number;
   durationMs: number;
   requiresStdin?: { requestId: string; prompt: string };
+}
+
+// ---------------------------------------------------------------------------
+// Standard Java library prototype extensions on String & Array for in-browser execution
+// ---------------------------------------------------------------------------
+if (typeof String !== 'undefined') {
+  if (!(String.prototype as any).equals) {
+    (String.prototype as any).equals = function (other: any) {
+      return this.valueOf() === (other !== null && other !== undefined ? String(other) : null);
+    };
+  }
+  if (!(String.prototype as any).equalsIgnoreCase) {
+    (String.prototype as any).equalsIgnoreCase = function (other: any) {
+      return other !== null && other !== undefined && this.toLowerCase() === String(other).toLowerCase();
+    };
+  }
+  if (!(String.prototype as any).contains) {
+    (String.prototype as any).contains = function (other: any) {
+      return this.includes(String(other));
+    };
+  }
+  if (!(String.prototype as any).isEmpty) {
+    (String.prototype as any).isEmpty = function () {
+      return this.length === 0;
+    };
+  }
+  if (!(String.prototype as any).compareTo) {
+    (String.prototype as any).compareTo = function (other: any) {
+      return this.localeCompare(String(other));
+    };
+  }
+}
+
+if (typeof Array !== 'undefined') {
+  if (!(Array.prototype as any).size) {
+    (Array.prototype as any).size = function () {
+      return this.length;
+    };
+  }
+  if (!(Array.prototype as any).get) {
+    (Array.prototype as any).get = function (i: number) {
+      return this[i];
+    };
+  }
+  if (!(Array.prototype as any).set) {
+    (Array.prototype as any).set = function (i: number, val: any) {
+      this[i] = val;
+      return val;
+    };
+  }
+  if (!(Array.prototype as any).isEmpty) {
+    (Array.prototype as any).isEmpty = function () {
+      return this.length === 0;
+    };
+  }
+  if (!(Array.prototype as any).add) {
+    (Array.prototype as any).add = function (val: any) {
+      this.push(val);
+      return true;
+    };
+  }
+  if (!(Array.prototype as any).remove) {
+    (Array.prototype as any).remove = function (i: number) {
+      return this.splice(i, 1)[0];
+    };
+  }
+  if (!(Array.prototype as any).clear) {
+    (Array.prototype as any).clear = function () {
+      this.length = 0;
+    };
+  }
+}
+
+// Emulation objects for Java standard wrapper classes
+const javaInteger = {
+  parseInt: (s: any, radix = 10) => parseInt(String(s).trim(), radix),
+  valueOf: (s: any) => parseInt(String(s).trim(), 10),
+  toString: (s: any) => String(s),
+  compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
+  max: (x: number, y: number) => Math.max(x, y),
+  min: (x: number, y: number) => Math.min(x, y),
+  MAX_VALUE: 2147483647,
+  MIN_VALUE: -2147483648,
+};
+
+const javaDouble = {
+  parseDouble: (s: any) => parseFloat(String(s).trim()),
+  valueOf: (s: any) => parseFloat(String(s).trim()),
+  toString: (s: any) => String(s),
+  compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
+  max: (x: number, y: number) => Math.max(x, y),
+  min: (x: number, y: number) => Math.min(x, y),
+  isNaN: (x: number) => isNaN(x),
+  isInfinite: (x: number) => !isFinite(x),
+  MAX_VALUE: Number.MAX_VALUE,
+  MIN_VALUE: Number.MIN_VALUE,
+  NaN: NaN,
+  POSITIVE_INFINITY: Infinity,
+  NEGATIVE_INFINITY: -Infinity,
+};
+
+const javaBoolean = {
+  parseBoolean: (s: any) => String(s).trim().toLowerCase() === 'true',
+  valueOf: (s: any) => String(s).trim().toLowerCase() === 'true',
+  toString: (s: any) => String(s),
+  TRUE: true,
+  FALSE: false,
+};
+
+const javaLong = {
+  parseLong: (s: any) => parseInt(String(s).trim(), 10),
+  valueOf: (s: any) => parseInt(String(s).trim(), 10),
+  toString: (s: any) => String(s),
+  MAX_VALUE: Number.MAX_SAFE_INTEGER,
+  MIN_VALUE: Number.MIN_SAFE_INTEGER,
+};
+
+const javaFloat = {
+  parseFloat: (s: any) => parseFloat(String(s).trim()),
+  valueOf: (s: any) => parseFloat(String(s).trim()),
+  toString: (s: any) => String(s),
+};
+
+const javaArrays = {
+  toString: (arr: any) => (Array.isArray(arr) ? `[${arr.join(', ')}]` : String(arr)),
+  sort: (arr: any) => {
+    if (Array.isArray(arr)) arr.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return arr;
+  },
+  fill: (arr: any, val: any) => {
+    if (Array.isArray(arr)) arr.fill(val);
+    return arr;
+  },
+  equals: (a: any, b: any) => {
+    if (!Array.isArray(a) || !Array.isArray(b)) return a === b;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  },
+};
+
+function formatJavaString(formatStr: string, args: any[]): string {
+  let argIdx = 0;
+  let result = formatStr.replace(/%n/g, '\n');
+  result = result.replace(/%(?:\d+)?(?:\.\d+)?[sdfbc%]/g, (match) => {
+    if (match === '%%') return '%';
+    if (argIdx >= args.length) return match;
+    const val = args[argIdx++];
+    if (match.endsWith('s')) {
+      return String(val !== undefined ? val : '');
+    } else if (match.endsWith('d')) {
+      return String(Math.floor(Number(val) || 0));
+    } else if (match.endsWith('f')) {
+      const precisionMatch = match.match(/\.(\d+)/);
+      if (precisionMatch) {
+        return Number(val || 0).toFixed(parseInt(precisionMatch[1], 10));
+      }
+      return Number(val || 0).toFixed(6);
+    } else if (match.endsWith('b')) {
+      return String(Boolean(val));
+    } else if (match.endsWith('c')) {
+      return String(val !== undefined ? val : '').charAt(0);
+    }
+    return String(val);
+  });
+  return result;
+}
+
+function splitArguments(expr: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inString = false;
+  let escape = false;
+  let depth = 0;
+
+  for (let i = 0; i < expr.length; i++) {
+    const char = expr[i];
+    if (escape) {
+      current += char;
+      escape = false;
+      continue;
+    }
+    if (char === '\\') {
+      escape = true;
+      current += char;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      current += char;
+      continue;
+    }
+    if (!inString) {
+      if (char === '(' || char === '[' || char === '{') depth++;
+      else if (char === ')' || char === ']' || char === '}') depth = Math.max(0, depth - 1);
+      else if (char === ',' && depth === 0) {
+        parts.push(current.trim());
+        current = '';
+        continue;
+      }
+    }
+    current += char;
+  }
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+  return parts;
+}
+
+function evalJavaExpr(
+  rawExpr: string,
+  scope: Record<string, any>,
+  helperClasses: Record<string, Record<string, () => any>> = {}
+): any {
+  let clean = rawExpr.trim().replace(/;+$/, '');
+  if (!clean) return undefined;
+
+  // Handle direct string literals
+  if (clean.startsWith('"') && clean.endsWith('"') && !clean.slice(1, -1).includes('"')) {
+    return clean.slice(1, -1);
+  }
+  if (clean === 'true') return true;
+  if (clean === 'false') return false;
+  if (clean === 'null') return null;
+  if (!isNaN(Number(clean))) return Number(clean);
+
+  // Convert Java array initializers {1, 2, 3} -> [1, 2, 3]
+  clean = clean.replace(/new\s+[A-Za-z0-9_<>[\]]+?\s*\{/g, '{');
+  clean = clean.replace(/\{([^{}]*)\}/g, '[$1]');
+
+  // Convert new int[size] -> Array(size).fill(0)
+  const newArrayMatch = clean.match(/^new\s+(?:int|double|float|long|boolean|String|var)\[([^\]]*)\](?:\s*\{([^}]*)\})?$/i);
+  if (newArrayMatch) {
+    if (newArrayMatch[2] !== undefined) {
+      clean = '[' + newArrayMatch[2] + ']';
+    } else {
+      const sizeExpr = newArrayMatch[1].trim();
+      const sizeVal = sizeExpr ? evalJavaExpr(sizeExpr, scope, helperClasses) : 0;
+      return new Array(Math.max(0, parseInt(String(sizeVal), 10) || 0)).fill(0);
+    }
+  }
+
+  // Convert new ArrayList(...) -> []
+  if (/^new\s+(?:ArrayList|List)(?:<[^>]*>)?\s*\(\s*\)$/i.test(clean)) {
+    return [];
+  }
+
+  // Convert .length() to .length for strings & arrays
+  clean = clean.replace(/\.length\(\)/g, '.length');
+
+  // Inject helper classes, e.g. Helper.greet()
+  for (const [cls, methods] of Object.entries(helperClasses)) {
+    for (const [mName, mFunc] of Object.entries(methods)) {
+      if (clean.includes(`${cls}.${mName}()`)) {
+        clean = clean.replaceAll(`${cls}.${mName}()`, JSON.stringify(mFunc()));
+      }
+    }
+  }
+
+  // Filter valid JS identifiers from scope
+  const validKeys: string[] = [];
+  const validVals: any[] = [];
+  for (const [k, v] of Object.entries(scope)) {
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k)) {
+      validKeys.push(k);
+      validVals.push(v);
+    }
+  }
+
+  try {
+    const fn = new Function(
+      ...validKeys,
+      'Integer',
+      'Double',
+      'Boolean',
+      'Long',
+      'Float',
+      'Arrays',
+      'Math',
+      `return (${clean});`
+    );
+    return fn(
+      ...validVals,
+      javaInteger,
+      javaDouble,
+      javaBoolean,
+      javaLong,
+      javaFloat,
+      javaArrays,
+      Math
+    );
+  } catch {
+    if (scope[clean] !== undefined) {
+      return scope[clean];
+    }
+    return clean;
+  }
 }
 
 export async function compileAndRunJava(
@@ -110,7 +407,7 @@ export async function compileAndRunJava(
   };
 
   if (options.stdin !== undefined) {
-    scope['stdin'] = options.stdin.trim();
+    scope['stdin'] = typeof options.stdin === 'string' ? options.stdin.trim() : options.stdin.join('\n');
   }
 
   // Parse stdin into a sequential line queue
@@ -166,10 +463,7 @@ export async function compileAndRunJava(
     return tokenBuffer.shift() ?? null;
   };
 
-  // 3. Sequential execution of lines inside main method
-  const lines = mainFile.content.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i].trim();
+  const executeStatement = async (rawLine: string): Promise<{ requiresStdin?: { requestId: string; prompt: string }; shouldExit?: boolean; exitCode?: number } | void> => {
     if (
       !rawLine ||
       rawLine.startsWith('//') ||
@@ -183,16 +477,27 @@ export async function compileAndRunJava(
       rawLine === '{' ||
       rawLine === '}'
     ) {
-      continue;
+      return;
     }
 
     // Scanner prompt / input check
     if (rawLine.includes('Scanner') && rawLine.includes('System.in')) {
-      continue;
+      return;
     }
 
     if (rawLine.includes('scanner.hasNext')) {
-      continue;
+      return;
+    }
+
+    if (rawLine.includes('scanner.close()')) {
+      return;
+    }
+
+    // System.exit(code)
+    const exitMatch = rawLine.match(/^System\.exit\s*\(([^)]*)\)\s*;?$/);
+    if (exitMatch) {
+      const exitCodeVal = parseInt(exitMatch[1].trim(), 10);
+      return { shouldExit: true, exitCode: isNaN(exitCodeVal) ? 0 : exitCodeVal };
     }
 
     // Scanner input reads: Boolean b= scanner.nextBoolean(); String name = scanner.nextLine(); int age = scanner.nextInt(); etc.
@@ -211,7 +516,6 @@ export async function compileAndRunJava(
       }
 
       if (rawVal === null) {
-        // Pause execution cleanly and emit stdin-request event to the UI
         const requestId = `java-stdin-${Date.now()}`;
         options.onEvent?.({
           type: 'stdin-request',
@@ -219,10 +523,6 @@ export async function compileAndRunJava(
           prompt: 'Enter input: ',
         });
         return {
-          stdout,
-          stderr,
-          exitCode: 0,
-          durationMs: Date.now() - startTime,
           requiresStdin: {
             requestId,
             prompt: 'Enter input: ',
@@ -246,10 +546,10 @@ export async function compileAndRunJava(
         scope[varName] = parsedVal;
       }
       scope['input'] = parsedVal;
-      continue;
+      return;
     }
 
-    // Helper invocations: Helper.greet() or Helper.getVersionInfo()
+    // Helper invocations: Helper.greet()
     for (const [cls, methods] of Object.entries(helperClasses)) {
       for (const [mName, mFunc] of Object.entries(methods)) {
         if (rawLine.includes(`${cls}.${mName}()`)) {
@@ -268,15 +568,18 @@ export async function compileAndRunJava(
           options.onStdout?.(out);
         }
       }
-      continue;
+      return;
     }
 
-    // System.out.println / System.out.print
-    const printMatch = rawLine.match(/^System\.out\.print(?:ln)?\s*\(([\s\S]*)\)\s*;?$/);
+    // System.out.println / System.out.print / System.out.printf / System.out.format
+    const printMatch = rawLine.match(/^System\.out\.(println|print|printf|format)\s*\(([\s\S]*)\)\s*;?$/);
     if (printMatch) {
-      let expr = printMatch[1].trim();
-      if (expr.includes('scanner.nextLine()')) {
-        const inlineInput = await getNextLine('Enter input: ');
+      const pMethod = printMatch[1];
+      let pExpr = printMatch[2].trim();
+
+      if (pExpr.includes('scanner.nextLine()') || pExpr.includes('scanner.next()')) {
+        const isLine = pExpr.includes('scanner.nextLine()');
+        const inlineInput = isLine ? await getNextLine('Enter input: ') : await getNextToken('Enter input: ');
         if (inlineInput === null) {
           const requestId = `java-stdin-${Date.now()}`;
           options.onEvent?.({
@@ -285,68 +588,175 @@ export async function compileAndRunJava(
             prompt: 'Enter input: ',
           });
           return {
-            stdout,
-            stderr,
-            exitCode: 0,
-            durationMs: Date.now() - startTime,
             requiresStdin: {
               requestId,
               prompt: 'Enter input: ',
             },
           };
         }
-        expr = expr.replaceAll('scanner.nextLine()', JSON.stringify(inlineInput));
+        pExpr = isLine
+          ? pExpr.replaceAll('scanner.nextLine()', JSON.stringify(inlineInput))
+          : pExpr.replaceAll('scanner.next()', JSON.stringify(inlineInput));
       }
-      let text = evalJavaPrint(expr, scope, options.stdin, helperClasses);
-      if (rawLine.includes('println')) {
-        text += '\n';
+
+      let text = '';
+      if (pMethod === 'printf' || pMethod === 'format') {
+        const parts = splitArguments(pExpr);
+        if (parts.length > 0) {
+          const formatStr = String(evalJavaExpr(parts[0], scope, helperClasses));
+          const evaledArgs = parts.slice(1).map((a) => evalJavaExpr(a, scope, helperClasses));
+          text = formatJavaString(formatStr, evaledArgs);
+        }
+      } else {
+        const evaluated = evalJavaExpr(pExpr, scope, helperClasses);
+        text = String(evaluated !== undefined ? evaluated : '');
+        if (pMethod === 'println') {
+          text += '\n';
+        }
       }
+
       stdout += text;
       options.onStdout?.(text);
-      continue;
+      return;
     }
 
-    // ArrayList instantiations
-    if (rawLine.includes('ArrayList')) {
-      const listMatch = rawLine.match(/(?:ArrayList|List)(?:<[^>]+>)?\s+([A-Za-z0-9_]+)/);
-      if (listMatch) {
-        scope[listMatch[1]] = [];
+    // Array element assignment: arr[i] = val;
+    const arrayElemAssignMatch = rawLine.match(/^([A-Za-z0-9_]+)\[([^\]]+)\]\s*=\s*([^;]+);?$/);
+    if (arrayElemAssignMatch) {
+      const arrName = arrayElemAssignMatch[1];
+      const idx = evalJavaExpr(arrayElemAssignMatch[2], scope, helperClasses);
+      const val = evalJavaExpr(arrayElemAssignMatch[3], scope, helperClasses);
+      if (scope[arrName] && typeof idx === 'number') {
+        scope[arrName][idx] = val;
       }
+      return;
+    }
+
+    // Compound assignment: x += 5; x -= 2; x *= 3; x /= 2; x %= 2;
+    const compoundAssignMatch = rawLine.match(/^([A-Za-z0-9_]+)\s*(\+=|-=|\*=\/=|%=)\s*([^;]+);?$/);
+    if (compoundAssignMatch) {
+      const vName = compoundAssignMatch[1];
+      const op = compoundAssignMatch[2];
+      const delta = evalJavaExpr(compoundAssignMatch[3], scope, helperClasses);
+      if (op === '+=') scope[vName] = (scope[vName] !== undefined ? scope[vName] : 0) + delta;
+      else if (op === '-=') scope[vName] = (scope[vName] !== undefined ? scope[vName] : 0) - delta;
+      else if (op === '*=') scope[vName] = (scope[vName] !== undefined ? scope[vName] : 0) * delta;
+      else if (op === '/=') scope[vName] = (scope[vName] !== undefined ? scope[vName] : 0) / delta;
+      else if (op === '%=') scope[vName] = (scope[vName] !== undefined ? scope[vName] : 0) % delta;
+      return;
+    }
+
+    // Unary increment / decrement: x++; x--; ++x; --x;
+    const unaryMatch = rawLine.match(/^(?:([A-Za-z0-9_]+)\s*(\+\+|--)|(\+\+|--)\s*([A-Za-z0-9_]+))\s*;?$/);
+    if (unaryMatch) {
+      const vName = unaryMatch[1] || unaryMatch[4];
+      const op = unaryMatch[2] || unaryMatch[3];
+      scope[vName] = Number(scope[vName] || 0) + (op === '++' ? 1 : -1);
+      return;
     }
 
     // ArrayList add
     const addMatch = rawLine.match(/([A-Za-z0-9_]+)\.add\(([^)]+)\);/);
     if (addMatch) {
       const listName = addMatch[1];
-      const val = addMatch[2].trim().replace(/^["']|["']$/g, '');
+      const val = evalJavaExpr(addMatch[2], scope, helperClasses);
       if (scope[listName] && Array.isArray(scope[listName])) {
-        scope[listName].push(isNaN(Number(val)) ? val : Number(val));
+        scope[listName].push(val);
       }
-      continue;
+      return;
     }
 
-    // Variable assignment: int x = 42; Boolean b = true; var msg = "Hello"; x = 99;
+    // General variable assignment: int x = 42; Boolean b = true; var msg = "Hello"; x = 99;
     const assignMatch = rawLine.match(/(?:(?:[A-Za-z0-9_<>[\]]+)\s+)?([A-Za-z0-9_]+)\s*=\s*([^;]+);/);
     if (assignMatch) {
       const varName = assignMatch[1];
       const valExpr = assignMatch[2].trim();
-      try {
-        if (valExpr.startsWith('"') && valExpr.endsWith('"')) {
-          scope[varName] = valExpr.slice(1, -1);
-        } else if (!isNaN(Number(valExpr))) {
-          scope[varName] = Number(valExpr);
-        } else if (valExpr === 'true') {
-          scope[varName] = true;
-        } else if (valExpr === 'false') {
-          scope[varName] = false;
-        } else if (valExpr.endsWith('.toString()')) {
-          const innerVar = valExpr.slice(0, -'.toString()'.length).trim();
-          scope[varName] = scope[innerVar] !== undefined ? String(scope[innerVar]) : valExpr;
-        } else if (scope[valExpr] !== undefined) {
-          scope[varName] = scope[valExpr];
+      scope[varName] = evalJavaExpr(valExpr, scope, helperClasses);
+      return;
+    }
+  };
+
+  // 3. Sequential execution of lines inside main method
+  const lines = mainFile.content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i].trim();
+    if (!rawLine) continue;
+
+    // For loop handling: for (int i = 0; i < n; i++) { ... }
+    const forMatch = rawLine.match(/^for\s*\(([^;]+);([^;]+);([^)]+)\)\s*\{?$/);
+    if (forMatch) {
+      const initStmt = forMatch[1].trim();
+      const condExpr = forMatch[2].trim();
+      const updateStmt = forMatch[3].trim();
+
+      let bodyEnd = i + 1;
+      let depth = rawLine.endsWith('{') ? 1 : 0;
+      const bodyLines: string[] = [];
+
+      while (bodyEnd < lines.length) {
+        const bl = lines[bodyEnd].trim();
+        if (bl === '{') {
+          depth++;
+        } else if (bl === '}' || bl.endsWith('}')) {
+          depth--;
+          if (depth <= 0) break;
+        } else if (depth > 0) {
+          bodyLines.push(bl);
         }
-      } catch {}
+        bodyEnd++;
+      }
+
+      // Execute loop init
+      await executeStatement(initStmt.endsWith(';') ? initStmt : initStmt + ';');
+
+      let iters = 0;
+      while (evalJavaExpr(condExpr, scope, helperClasses) && iters < 10000) {
+        iters++;
+        for (const bLine of bodyLines) {
+          const res = await executeStatement(bLine);
+          if (res?.requiresStdin) {
+            return {
+              stdout,
+              stderr,
+              exitCode: 0,
+              durationMs: Date.now() - startTime,
+              requiresStdin: res.requiresStdin,
+            };
+          }
+          if (res?.shouldExit) {
+            return {
+              stdout,
+              stderr,
+              exitCode: res.exitCode || 0,
+              durationMs: Date.now() - startTime,
+            };
+          }
+        }
+        // Execute update statement
+        await executeStatement(updateStmt.endsWith(';') ? updateStmt : updateStmt + ';');
+      }
+
+      i = bodyEnd;
       continue;
+    }
+
+    const res = await executeStatement(rawLine);
+    if (res?.requiresStdin) {
+      return {
+        stdout,
+        stderr,
+        exitCode: 0,
+        durationMs: Date.now() - startTime,
+        requiresStdin: res.requiresStdin,
+      };
+    }
+    if (res?.shouldExit) {
+      return {
+        stdout,
+        stderr,
+        exitCode: res.exitCode || 0,
+        durationMs: Date.now() - startTime,
+      };
     }
   }
 
@@ -357,118 +767,4 @@ export async function compileAndRunJava(
     exitCode: 0,
     durationMs,
   };
-}
-
-function splitStringConcatenation(expr: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let inString = false;
-  let escape = false;
-
-  for (let i = 0; i < expr.length; i++) {
-    const char = expr[i];
-    if (escape) {
-      current += char;
-      escape = false;
-      continue;
-    }
-    if (char === '\\') {
-      escape = true;
-      current += char;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      current += char;
-      continue;
-    }
-    if (char === '+' && !inString) {
-      parts.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  if (current.trim()) {
-    parts.push(current.trim());
-  }
-  return parts;
-}
-
-function evalJavaPrint(
-  expr: string,
-  scope: Record<string, any>,
-  suppliedInput?: string,
-  helperClasses: Record<string, Record<string, () => any>> = {}
-): string {
-  if (expr.startsWith('"') && expr.endsWith('"') && !expr.slice(1, -1).includes('"')) {
-    return expr.slice(1, -1);
-  }
-
-  const parts = splitStringConcatenation(expr);
-  let out = '';
-  for (const p of parts) {
-    if (p.startsWith('"') && p.endsWith('"')) {
-      out += p.slice(1, -1);
-    } else if (scope[p] !== undefined) {
-      out += String(scope[p]);
-    } else {
-      // Check for method calls on variables, e.g. b.toString(), b.booleanValue(), str.trim(), etc.
-      const dotMethodMatch = p.match(/^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\s*\(\)$/);
-      if (dotMethodMatch && scope[dotMethodMatch[1]] !== undefined) {
-        const val = scope[dotMethodMatch[1]];
-        const method = dotMethodMatch[2];
-        if (method === 'toString') {
-          out += String(val);
-          continue;
-        } else if (method === 'booleanValue') {
-          out += String(Boolean(val));
-          continue;
-        } else if (method === 'intValue' || method === 'longValue') {
-          out += String(Math.floor(Number(val)));
-          continue;
-        } else if (method === 'doubleValue' || method === 'floatValue') {
-          out += String(Number(val));
-          continue;
-        } else if (method === 'toLowerCase' && typeof val === 'string') {
-          out += val.toLowerCase();
-          continue;
-        } else if (method === 'toUpperCase' && typeof val === 'string') {
-          out += val.toUpperCase();
-          continue;
-        } else if (method === 'trim' && typeof val === 'string') {
-          out += val.trim();
-          continue;
-        } else if (method === 'length') {
-          out += String(val.length);
-          continue;
-        }
-      }
-
-      // Check for static wrapper calls, e.g. Boolean.toString(b), String.valueOf(b)
-      const staticWrapperMatch = p.match(/^(?:Boolean|Integer|Double|Float|Long|String)\.(?:toString|valueOf)\(([^)]+)\)$/);
-      if (staticWrapperMatch) {
-        const arg = staticWrapperMatch[1].trim();
-        if (scope[arg] !== undefined) {
-          out += String(scope[arg]);
-          continue;
-        }
-      }
-
-      let foundHelper = false;
-      for (const [cls, methods] of Object.entries(helperClasses)) {
-        for (const [mName, mFunc] of Object.entries(methods)) {
-          if (p === `${cls}.${mName}()`) {
-            out += mFunc();
-            foundHelper = true;
-            break;
-          }
-        }
-      }
-      if (!foundHelper) {
-        out += p;
-      }
-    }
-  }
-  return out;
 }
