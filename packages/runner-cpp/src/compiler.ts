@@ -23,7 +23,7 @@ class StreamFd extends Fd {
 class StdinFd extends Fd {
   private buffer: Uint8Array = new Uint8Array(0);
   private offset: number = 0;
-  private readCalled: boolean = false;
+  private eofReached: boolean = false;
   private requestStdin?: () => string;
 
   constructor(inputString?: string, requestStdin?: () => string) {
@@ -36,13 +36,14 @@ class StdinFd extends Fd {
 
   override fd_read(size: number): { ret: number; data: Uint8Array } {
     if (this.offset >= this.buffer.length) {
-      if (!this.readCalled && this.requestStdin) {
-        this.readCalled = true;
+      if (!this.eofReached && this.requestStdin) {
         const val = this.requestStdin();
-        if (val) {
+        if (val !== undefined && val !== null && val !== '') {
           const formatted = val.endsWith('\n') ? val : val + '\n';
           this.buffer = new TextEncoder().encode(formatted);
           this.offset = 0;
+        } else {
+          this.eofReached = true;
         }
       }
     }
