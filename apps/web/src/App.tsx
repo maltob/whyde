@@ -263,6 +263,7 @@ export const App: React.FC = () => {
         project={project}
         saveStatus={saveStatus}
         isRunning={isRunning}
+        hideNewProject={initialHash.hideNewProject}
         onRun={handleRun}
         onStop={handleStop}
         onNewProject={handleNewProject}

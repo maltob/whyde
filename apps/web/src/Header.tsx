@@ -6,6 +6,7 @@ interface HeaderProps {
   project: Project;
   saveStatus: 'saved' | 'saving' | 'error';
   isRunning: boolean;
+  hideNewProject?: boolean;
   onRun: () => void;
   onStop: () => void;
   onNewProject: (lang: 'python' | 'java' | 'cpp', blank?: boolean) => void;
@@ -15,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({
   project,
   saveStatus,
   isRunning,
+  hideNewProject = false,
   onRun,
   onStop,
   onNewProject,
@@ -97,45 +99,47 @@ export const Header: React.FC<HeaderProps> = ({
         </span>
 
         {/* Language template switcher */}
-        <select
-          aria-label="New Project"
-          onChange={(e) => {
-            if (e.target.value) {
-              const val = e.target.value;
-              if (val.endsWith('-blank')) {
-                const lang = val.replace('-blank', '') as 'python' | 'java' | 'cpp';
-                onNewProject(lang, true);
-              } else {
-                onNewProject(val as 'python' | 'java' | 'cpp', false);
+        {!hideNewProject && (
+          <select
+            aria-label="New Project"
+            onChange={(e) => {
+              if (e.target.value) {
+                const val = e.target.value;
+                if (val.endsWith('-blank')) {
+                  const lang = val.replace('-blank', '') as 'python' | 'java' | 'cpp';
+                  onNewProject(lang, true);
+                } else {
+                  onNewProject(val as 'python' | 'java' | 'cpp', false);
+                }
+                e.target.value = '';
               }
-              e.target.value = '';
-            }
-          }}
-          defaultValue=""
-          style={{
-            backgroundColor: '#1e293b',
-            color: '#f8fafc',
-            border: '1px solid #475569',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            fontSize: '0.8rem',
-            cursor: 'pointer',
-          }}
-        >
-          <option value="" disabled>
-            + New Project...
-          </option>
-          <optgroup label="Starter Demos">
-            <option value="python">Python 3.14 (Starter)</option>
-            <option value="java">Java 11+ (Starter)</option>
-            <option value="cpp">C++17+ (Starter)</option>
-          </optgroup>
-          <optgroup label="Blank / Student Templates">
-            <option value="python-blank">Python (Blank)</option>
-            <option value="java-blank">Java (Blank)</option>
-            <option value="cpp-blank">C++ (Blank)</option>
-          </optgroup>
-        </select>
+            }}
+            defaultValue=""
+            style={{
+              backgroundColor: '#1e293b',
+              color: '#f8fafc',
+              border: '1px solid #475569',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="" disabled>
+              + New Project...
+            </option>
+            <optgroup label="Starter Demos">
+              <option value="python">Python 3.14 (Starter)</option>
+              <option value="java">Java 11+ (Starter)</option>
+              <option value="cpp">C++17+ (Starter)</option>
+            </optgroup>
+            <optgroup label="Blank / Student Templates">
+              <option value="python-blank">Python (Blank)</option>
+              <option value="java-blank">Java (Blank)</option>
+              <option value="cpp-blank">C++ (Blank)</option>
+            </optgroup>
+          </select>
+        )}
 
         {/* Run / Stop buttons */}
         {!isRunning ? (

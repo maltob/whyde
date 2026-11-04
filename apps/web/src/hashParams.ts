@@ -1,11 +1,12 @@
 /**
- * Parses URL hash parameters (e.g. #lang=cpp&blank=true&highlight=off&file=src/main.cpp)
+ * Parses URL hash parameters (e.g. #lang=cpp&blank=true&hideNewProject=true&highlight=off&file=src/main.cpp)
  */
 export interface UrlHashOptions {
   lang?: 'python' | 'cpp' | 'java';
   blank?: boolean;
   highlight?: boolean;
   file?: string;
+  hideNewProject?: boolean;
 }
 
 export function parseHashString(hash: string): UrlHashOptions {
@@ -27,6 +28,11 @@ export function parseHashString(hash: string): UrlHashOptions {
   const blank = params.get('blank') || params.get('empty');
   if (blank !== null) {
     result.blank = blank !== 'false' && blank !== '0' && blank !== 'no';
+  }
+
+  const hideNew = params.get('hideNewProject') || params.get('hideNew') || params.get('locked');
+  if (hideNew !== null) {
+    result.hideNewProject = hideNew !== 'false' && hideNew !== '0' && hideNew !== 'no';
   }
 
   const highlight = params.get('highlight') || params.get('color');
@@ -58,6 +64,7 @@ export function setUrlHash(options: UrlHashOptions): void {
   const params = new URLSearchParams();
   if (options.lang) params.set('lang', options.lang);
   if (options.blank) params.set('blank', 'true');
+  if (options.hideNewProject) params.set('hideNewProject', 'true');
   if (options.highlight !== undefined) params.set('highlight', options.highlight ? 'on' : 'off');
   if (options.file) params.set('file', options.file);
 

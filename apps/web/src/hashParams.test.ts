@@ -15,9 +15,10 @@ describe('parseHashString', () => {
   });
 
   it('parses highlight on and java project', () => {
-    const res = parseHashString('#project=java&highlight=on&blank=true');
+    const res = parseHashString('#project=java&highlight=on&blank=true&hideNewProject=true');
     expect(res.lang).toBe('java');
     expect(res.highlight).toBe(true);
     expect(res.blank).toBe(true);
+    expect(res.hideNewProject).toBe(true);
   });
 });
