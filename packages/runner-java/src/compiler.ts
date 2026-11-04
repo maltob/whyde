@@ -88,68 +88,215 @@ if (typeof Array !== 'undefined') {
   }
 }
 
+if (typeof Number !== 'undefined') {
+  if (!(Number.prototype as any).intValue) {
+    (Number.prototype as any).intValue = function () {
+      return Math.trunc(this.valueOf());
+    };
+  }
+  if (!(Number.prototype as any).doubleValue) {
+    (Number.prototype as any).doubleValue = function () {
+      return Number(this.valueOf());
+    };
+  }
+  if (!(Number.prototype as any).floatValue) {
+    (Number.prototype as any).floatValue = function () {
+      return Number(this.valueOf());
+    };
+  }
+  if (!(Number.prototype as any).longValue) {
+    (Number.prototype as any).longValue = function () {
+      return Math.trunc(this.valueOf());
+    };
+  }
+  if (!(Number.prototype as any).byteValue) {
+    (Number.prototype as any).byteValue = function () {
+      return (Math.trunc(this.valueOf()) << 24) >> 24;
+    };
+  }
+  if (!(Number.prototype as any).shortValue) {
+    (Number.prototype as any).shortValue = function () {
+      return (Math.trunc(this.valueOf()) << 16) >> 16;
+    };
+  }
+}
+
+if (typeof Boolean !== 'undefined') {
+  if (!(Boolean.prototype as any).booleanValue) {
+    (Boolean.prototype as any).booleanValue = function () {
+      return Boolean(this.valueOf());
+    };
+  }
+}
+
+if (typeof String !== 'undefined') {
+  if (!(String.prototype as any).charValue) {
+    (String.prototype as any).charValue = function () {
+      return this.charAt(0);
+    };
+  }
+}
+
 // Emulation objects for Java standard wrapper classes
-const javaInteger = {
-  parseInt: (s: any, radix = 10) => parseInt(String(s).trim(), radix),
-  valueOf: (s: any) => parseInt(String(s).trim(), 10),
-  toString: (s: any) => String(s),
-  compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
-  max: (x: number, y: number) => Math.max(x, y),
-  min: (x: number, y: number) => Math.min(x, y),
-  MAX_VALUE: 2147483647,
-  MIN_VALUE: -2147483648,
-};
+function createWrapperClass(name: string, parseFn: (s: any) => any, castFn: (s: any) => any, extraProps: Record<string, any> = {}) {
+  function Wrapper(this: any, val: any) {
+    if (!(this instanceof Wrapper)) {
+      return castFn(val);
+    }
+    (this as any).value = castFn(val);
+  }
+  Wrapper.prototype.valueOf = function (this: any) {
+    return this.value;
+  };
+  Wrapper.prototype.toString = function (this: any) {
+    return String(this.value);
+  };
+  Wrapper.prototype.intValue = function (this: any) {
+    return Math.trunc(this.value);
+  };
+  Wrapper.prototype.doubleValue = function (this: any) {
+    return Number(this.value);
+  };
+  Wrapper.prototype.floatValue = function (this: any) {
+    return Number(this.value);
+  };
+  Wrapper.prototype.longValue = function (this: any) {
+    return Math.trunc(this.value);
+  };
+  Wrapper.prototype.byteValue = function (this: any) {
+    return (Math.trunc(this.value) << 24) >> 24;
+  };
+  Wrapper.prototype.shortValue = function (this: any) {
+    return (Math.trunc(this.value) << 16) >> 16;
+  };
+  Wrapper.prototype.booleanValue = function (this: any) {
+    return Boolean(this.value);
+  };
+  Wrapper.prototype.charValue = function (this: any) {
+    return typeof this.value === 'string' ? this.value.charAt(0) : String.fromCharCode(this.value);
+  };
 
-const javaDouble = {
-  parseDouble: (s: any) => parseFloat(String(s).trim()),
-  valueOf: (s: any) => parseFloat(String(s).trim()),
-  toString: (s: any) => String(s),
-  compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
-  max: (x: number, y: number) => Math.max(x, y),
-  min: (x: number, y: number) => Math.min(x, y),
-  isNaN: (x: number) => isNaN(x),
-  isInfinite: (x: number) => !isFinite(x),
-  MAX_VALUE: Number.MAX_VALUE,
-  MIN_VALUE: Number.MIN_VALUE,
-  NaN: NaN,
-  POSITIVE_INFINITY: Infinity,
-  NEGATIVE_INFINITY: -Infinity,
-};
+  Wrapper.valueOf = (val: any) => castFn(val);
+  Wrapper.toString = (val: any) => String(val);
 
-const javaBoolean = {
-  parseBoolean: (s: any) => String(s).trim().toLowerCase() === 'true',
-  valueOf: (s: any) => String(s).trim().toLowerCase() === 'true',
-  toString: (s: any) => String(s),
-  TRUE: true,
-  FALSE: false,
-};
+  for (const [k, v] of Object.entries(extraProps)) {
+    (Wrapper as any)[k] = v;
+  }
+  return Wrapper;
+}
 
-const javaLong = {
-  parseLong: (s: any) => parseInt(String(s).trim(), 10),
-  valueOf: (s: any) => parseInt(String(s).trim(), 10),
-  toString: (s: any) => String(s),
-  MAX_VALUE: Number.MAX_SAFE_INTEGER,
-  MIN_VALUE: Number.MIN_SAFE_INTEGER,
-};
+const javaInteger: any = createWrapperClass(
+  'Integer',
+  (s: any) => parseInt(String(s).trim(), 10),
+  (s: any) => {
+    if (typeof s === 'string' && s.length === 1 && isNaN(Number(s))) return s.charCodeAt(0);
+    return Math.trunc(Number(s) || 0);
+  },
+  {
+    parseInt: (s: any, radix = 10) => parseInt(String(s).trim(), radix),
+    compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
+    max: (x: number, y: number) => Math.max(x, y),
+    min: (x: number, y: number) => Math.min(x, y),
+    MAX_VALUE: 2147483647,
+    MIN_VALUE: -2147483648,
+  }
+);
 
-const javaFloat = {
-  parseFloat: (s: any) => parseFloat(String(s).trim()),
-  valueOf: (s: any) => parseFloat(String(s).trim()),
-  toString: (s: any) => String(s),
-};
+const javaDouble: any = createWrapperClass(
+  'Double',
+  (s: any) => parseFloat(String(s).trim()),
+  (s: any) => parseFloat(String(s).trim()),
+  {
+    parseDouble: (s: any) => parseFloat(String(s).trim()),
+    compare: (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0),
+    max: (x: number, y: number) => Math.max(x, y),
+    min: (x: number, y: number) => Math.min(x, y),
+    isNaN: (x: number) => isNaN(x),
+    isInfinite: (x: number) => !isFinite(x),
+    MAX_VALUE: Number.MAX_VALUE,
+    MIN_VALUE: Number.MIN_VALUE,
+    NaN: NaN,
+    POSITIVE_INFINITY: Infinity,
+    NEGATIVE_INFINITY: -Infinity,
+  }
+);
 
-const javaCharacter = {
-  isDigit: (c: any) => /^\d$/.test(String(c)),
-  isLetter: (c: any) => /^[a-zA-Z]$/.test(String(c)),
-  isLetterOrDigit: (c: any) => /^[a-zA-Z0-9]$/.test(String(c)),
-  isWhitespace: (c: any) => /^\s$/.test(String(c)),
-  isUpperCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toUpperCase() && c !== c.toLowerCase(),
-  isLowerCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toLowerCase() && c !== c.toUpperCase(),
-  toUpperCase: (c: any) => String(c).toUpperCase(),
-  toLowerCase: (c: any) => String(c).toLowerCase(),
-  toString: (c: any) => String(c),
-  valueOf: (c: any) => String(c).charAt(0),
-};
+const javaBoolean: any = createWrapperClass(
+  'Boolean',
+  (s: any) => String(s).trim().toLowerCase() === 'true',
+  (s: any) => (typeof s === 'boolean' ? s : String(s).trim().toLowerCase() === 'true'),
+  {
+    parseBoolean: (s: any) => String(s).trim().toLowerCase() === 'true',
+    TRUE: true,
+    FALSE: false,
+  }
+);
+
+const javaLong: any = createWrapperClass(
+  'Long',
+  (s: any) => parseInt(String(s).trim(), 10),
+  (s: any) => parseInt(String(s).trim(), 10),
+  {
+    parseLong: (s: any) => parseInt(String(s).trim(), 10),
+    MAX_VALUE: Number.MAX_SAFE_INTEGER,
+    MIN_VALUE: Number.MIN_SAFE_INTEGER,
+  }
+);
+
+const javaFloat: any = createWrapperClass(
+  'Float',
+  (s: any) => parseFloat(String(s).trim()),
+  (s: any) => parseFloat(String(s).trim()),
+  {
+    parseFloat: (s: any) => parseFloat(String(s).trim()),
+  }
+);
+
+const javaCharacter: any = createWrapperClass(
+  'Character',
+  (s: any) => String(s).charAt(0),
+  (s: any) => (typeof s === 'number' ? String.fromCharCode(s) : String(s).charAt(0)),
+  {
+    isDigit: (c: any) => /^\d$/.test(String(c)),
+    isLetter: (c: any) => /^[a-zA-Z]$/.test(String(c)),
+    isLetterOrDigit: (c: any) => /^[a-zA-Z0-9]$/.test(String(c)),
+    isWhitespace: (c: any) => /^\s$/.test(String(c)),
+    isUpperCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toUpperCase() && c !== c.toLowerCase(),
+    isLowerCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toLowerCase() && c !== c.toUpperCase(),
+    toUpperCase: (c: any) => String(c).toUpperCase(),
+    toLowerCase: (c: any) => String(c).toLowerCase(),
+    valueOf: (c: any) => (typeof c === 'number' ? String.fromCharCode(c) : String(c).charAt(0)),
+  }
+);
+
+// Cast helper functions
+function castToInt(val: any): number {
+  if (typeof val === 'string' && val.length === 1 && isNaN(Number(val))) {
+    return val.charCodeAt(0);
+  }
+  return Math.trunc(Number(val) || 0);
+}
+
+function castToChar(val: any): string {
+  if (typeof val === 'number') {
+    return String.fromCharCode(val);
+  }
+  return String(val).charAt(0);
+}
+
+function castToByte(val: any): number {
+  const n = castToInt(val);
+  return (n << 24) >> 24;
+}
+
+function castToShort(val: any): number {
+  const n = castToInt(val);
+  return (n << 16) >> 16;
+}
+
+function castToDouble(val: any): number {
+  return Number(val);
+}
 
 const javaArrays = {
   toString: (arr: any) => (Array.isArray(arr) ? `[${arr.join(', ')}]` : String(arr)),
@@ -300,12 +447,21 @@ function evalJavaExpr(
   clean = clean.replace(/new\s+Random\s*\([^)]*\)/g, 'createJavaRandom()');
 
   // Support type casts
-  clean = clean.replace(/\(int\)\s*('[^']')/g, (_, ch) => String(ch.charCodeAt(1)));
-  clean = clean.replace(/\(char\)\s*(\d+)/g, (_, code) => JSON.stringify(String.fromCharCode(parseInt(code, 10))));
-  clean = clean.replace(/\(int\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Math.floor($1)');
-  clean = clean.replace(/\(double\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Number($1)');
-  clean = clean.replace(/\(float\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Number($1)');
-  clean = clean.replace(/\(long\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Math.floor($1)');
+  // Repeatedly rewrite inner casts so nested casts like (int)(char)code or (double)(int)x work
+  for (let iter = 0; iter < 4; iter++) {
+    const before = clean;
+    clean = clean.replace(/\(int\)\s*('[^']')/g, (_, ch) => String(ch.charCodeAt(1)));
+    clean = clean.replace(/\(char\)\s*('[^']')/g, '$1');
+    clean = clean.replace(/\(int\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToInt($1)');
+    clean = clean.replace(/\(char\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToChar($1)');
+    clean = clean.replace(/\(byte\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToByte($1)');
+    clean = clean.replace(/\(short\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToShort($1)');
+    clean = clean.replace(/\(long\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToInt($1)');
+    clean = clean.replace(/\(double\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToDouble($1)');
+    clean = clean.replace(/\(float\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, 'castToDouble($1)');
+    clean = clean.replace(/\((?:String|Integer|Double|Boolean|Long|Float|Character|Object)\)\s*([A-Za-z0-9_.]+|\([^()]+\))/g, '($1)');
+    if (clean === before) break;
+  }
 
   // Convert new int[size] -> Array(size).fill(0)
   const newArrayMatch = clean.match(/^new\s+(?:int|double|float|long|boolean|String|var)\[([^\]]*)\](?:\s*\[([^\]]*)\])?$/i);
@@ -356,6 +512,11 @@ function evalJavaExpr(
       'Random',
       'createJavaRandom',
       'Math',
+      'castToInt',
+      'castToChar',
+      'castToByte',
+      'castToShort',
+      'castToDouble',
       `return (${clean});`
     );
     return fn(
@@ -370,7 +531,12 @@ function evalJavaExpr(
       javaCollections,
       javaRandomClass,
       createJavaRandom,
-      Math
+      Math,
+      castToInt,
+      castToChar,
+      castToByte,
+      castToShort,
+      castToDouble
     );
   } catch {
     if (scope[clean] !== undefined) {

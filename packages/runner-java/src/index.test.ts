@@ -403,4 +403,68 @@ public class Main {
     expect(res.stdout).toContain('CharCast: A\n');
     expect(res.stdout).toContain('IntCast: 9\n');
   });
+
+  it('supports autoboxing, wrapper constructors, unboxing methods, and primitive/reference casts', async () => {
+    const boxingCode = `
+package demo;
+
+public class Main {
+    public static void main(String[] args) {
+        Integer i1 = new Integer(42);
+        Integer i2 = Integer.valueOf(100);
+        Integer sum = i1 + i2;
+        System.out.println("Sum: " + sum);
+        System.out.println("IntVal: " + i1.intValue());
+
+        Double d = new Double(3.14);
+        System.out.println("DoubleVal: " + d.doubleValue());
+
+        Boolean b = new Boolean(true);
+        System.out.println("BoolVal: " + b.booleanValue());
+
+        char ch = 'A';
+        int code = (int) ch;
+        System.out.println("Code of A: " + code);
+
+        int nextCode = 66;
+        char nextCh = (char) nextCode;
+        System.out.println("Char 66: " + nextCh);
+
+        int large = 300;
+        byte bVal = (byte) large;
+        System.out.println("Byte 300: " + bVal);
+
+        short sVal = (short) 40000;
+        System.out.println("Short 40000: " + sVal);
+
+        Object msg = "Hello from Object";
+        String sMsg = (String) msg;
+        System.out.println("Cast string: " + sMsg);
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-boxing-casts-test',
+      name: 'Java Boxing Casts Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: boxingCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await compileAndRunJava(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Sum: 142\n');
+    expect(res.stdout).toContain('IntVal: 42\n');
+    expect(res.stdout).toContain('DoubleVal: 3.14\n');
+    expect(res.stdout).toContain('BoolVal: true\n');
+    expect(res.stdout).toContain('Code of A: 65\n');
+    expect(res.stdout).toContain('Char 66: B\n');
+    expect(res.stdout).toContain('Byte 300: 44\n');
+    expect(res.stdout).toContain('Short 40000: -25536\n');
+    expect(res.stdout).toContain('Cast string: Hello from Object\n');
+  });
 });
