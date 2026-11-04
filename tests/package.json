@@ -11,9 +11,10 @@
     "@ide/execution-contracts": "workspace:*",
     "@ide/project-model": "workspace:*",
     "@ide/runner-cpp": "workspace:*",
+    "@ide/runner-java": "workspace:*",
     "@ide/runner-python": "workspace:*",
     "@pocs/java-oss": "workspace:*",
-    "@ide/runner-java": "workspace:*"
+    "java-parser": "^3.0.1"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

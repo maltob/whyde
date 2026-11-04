@@ -278,4 +278,40 @@ print(f"CPython unittest results: ran={result.testsRun}, errors={len(result.erro
     expect(res.stderr).toBe('');
     expect(res.stdout).toContain('CPython unittest results: ran=2, errors=0, failures=0');
   }, 30000);
+
+  it('supports directory traversal with relative paths (..)', async () => {
+    const { executePythonInPyodide } = await import('./pyodideRunner.js');
+    const projectWithRelativeDir: Project = {
+      schemaVersion: 1,
+      name: 'Relative Path Test',
+      language: 'python',
+      id: 'proj-rel-path',
+      entrypoint: 'src/main.py',
+      files: [
+        {
+          path: 'cats.txt',
+          encoding: 'utf-8',
+          content: 'Oliver\nLuna\nMilo\n',
+        },
+        {
+          path: 'src/main.py',
+          encoding: 'utf-8',
+          content: `
+file_path = "../cats.txt"
+with open(file_path, "r") as f:
+    for line in f:
+        print(line.strip())
+`,
+        },
+      ],
+      toolchain: { runtimeId: 'python-pyodide', requestedVersion: '314.0.7' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await executePythonInPyodide(projectWithRelativeDir);
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+    expect(res.stdout).toBe('Oliver\nLuna\nMilo\n');
+  }, 30000);
 });

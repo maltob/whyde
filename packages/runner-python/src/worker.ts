@@ -6,7 +6,8 @@ let stdinQueue: string[] = [];
 
 async function getPyodide(indexURL?: string) {
   if (!pyodideInstance) {
-    pyodideInstance = await loadPyodide(indexURL ? { indexURL } : undefined);
+    const defaultIndex = indexURL || 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
+    pyodideInstance = await loadPyodide({ indexURL: defaultIndex });
   }
   return pyodideInstance;
 }
@@ -84,9 +85,13 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         : '/' + request.project.entrypoint;
       const entryDir = entryPath.substring(0, entryPath.lastIndexOf('/')) || '/';
       await pyodide.runPythonAsync(`
-import sys
+import sys, os
 if '${entryDir}' not in sys.path:
     sys.path.insert(0, '${entryDir}')
+try:
+    os.chdir('${entryDir}')
+except Exception:
+    pass
 `);
 
       const entryFile = request.project.files.find(

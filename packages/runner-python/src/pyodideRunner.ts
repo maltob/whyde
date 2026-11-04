@@ -11,6 +11,9 @@ export async function getPyodideInstance(options?: { indexURL?: string; packageC
 
       if (options?.indexURL) {
         opts.indexURL = options.indexURL;
+      } else if (typeof window !== 'undefined' || typeof self !== 'undefined') {
+        // In browser / web worker environment, default to CDN indexURL so pyodide.asm.mjs and wasm fetch properly
+        opts.indexURL = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
       }
       if (options?.packageCacheDir) {
         opts.packageCacheDir = options.packageCacheDir;
@@ -123,13 +126,17 @@ export async function executePythonInPyodide(
     }
   }
 
-  // Ensure entrypoint directory is in sys.path
+  // Ensure entrypoint directory is in sys.path and is the current working directory
   const entryPath = project.entrypoint.startsWith('/') ? project.entrypoint : '/' + project.entrypoint;
   const entryDir = entryPath.substring(0, entryPath.lastIndexOf('/')) || '/';
   await pyodide.runPythonAsync(`
-import sys
+import sys, os
 if '${entryDir}' not in sys.path:
     sys.path.insert(0, '${entryDir}')
+try:
+    os.chdir('${entryDir}')
+except Exception:
+    pass
 `);
 
   const entryFile = project.files.find((f) => f.path === project.entrypoint || '/' + f.path === entryPath);
