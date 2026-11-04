@@ -6,7 +6,7 @@ import { Header } from './Header.js';
 import { FileTree } from './FileTree.js';
 import { Editor } from './Editor.js';
 import { XtermTerminal } from './XtermTerminal.js';
-import { STARTER_PROJECTS } from './templates.js';
+import { STARTER_PROJECTS, BLANK_PROJECTS } from './templates.js';
 import { executeClientSideCode } from './clientExecutor.js';
 import { parseUrlHash, setUrlHash } from './hashParams.js';
 
@@ -15,10 +15,15 @@ const repo = new IndexedDbProjectRepository();
 export const App: React.FC = () => {
   const initialHash = useRef(parseUrlHash()).current;
   const [project, setProject] = useState<Project>(() => {
-    if (initialHash.lang && STARTER_PROJECTS[initialHash.lang]) {
-      return STARTER_PROJECTS[initialHash.lang]();
+    if (initialHash.lang) {
+      if (initialHash.blank && BLANK_PROJECTS[initialHash.lang]) {
+        return BLANK_PROJECTS[initialHash.lang]();
+      }
+      if (STARTER_PROJECTS[initialHash.lang]) {
+        return STARTER_PROJECTS[initialHash.lang]();
+      }
     }
-    return STARTER_PROJECTS.python();
+    return initialHash.blank ? BLANK_PROJECTS.python() : STARTER_PROJECTS.python();
   });
   const [activeFilePath, setActiveFilePath] = useState<string>(() => {
     return initialHash.file || (initialHash.lang ? STARTER_PROJECTS[initialHash.lang]().entrypoint : 'src/main.py');
@@ -44,9 +49,10 @@ export const App: React.FC = () => {
     autoSaveRef.current = autoSave;
 
     repo.list().then(async (list) => {
-      // If user provided a specific language via URL hash, prioritize it
-      if (initialHash.lang && STARTER_PROJECTS[initialHash.lang]) {
-        const hashProj = STARTER_PROJECTS[initialHash.lang]();
+      // If user provided a specific language/blank via URL hash, prioritize it
+      if (initialHash.lang || initialHash.blank) {
+        const lang = initialHash.lang || 'python';
+        const hashProj = initialHash.blank ? BLANK_PROJECTS[lang]() : STARTER_PROJECTS[lang]();
         setProject(hashProj);
         setActiveFilePath(initialHash.file || hashProj.entrypoint);
         const rev = await repo.save(hashProj);
@@ -112,8 +118,8 @@ export const App: React.FC = () => {
     autoSaveRef.current?.scheduleSave(updatedProj);
   };
 
-  const handleNewProject = async (lang: 'python' | 'java' | 'cpp') => {
-    const newProj = STARTER_PROJECTS[lang]();
+  const handleNewProject = async (lang: 'python' | 'java' | 'cpp', blank: boolean = false) => {
+    const newProj = blank ? BLANK_PROJECTS[lang]() : STARTER_PROJECTS[lang]();
     setProject(newProj);
     setActiveFilePath(newProj.entrypoint);
     setLogs([]);
@@ -122,6 +128,7 @@ export const App: React.FC = () => {
     setIsRunning(false);
     setUrlHash({
       lang,
+      blank: blank ? true : undefined,
       file: newProj.entrypoint,
       highlight: syntaxColoring,
     });

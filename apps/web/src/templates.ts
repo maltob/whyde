@@ -136,3 +136,82 @@ void greet() {
     updatedAt: new Date().toISOString(),
   }),
 };
+
+export const BLANK_PROJECTS: Record<'python' | 'java' | 'cpp', () => Project> = {
+  python: () => ({
+    schemaVersion: 1,
+    kind: 'browser-ide-project',
+    id: `proj-python-blank-${Date.now()}`,
+    name: 'Python (Blank)',
+    language: 'python',
+    entrypoint: 'src/main.py',
+    files: [
+      {
+        path: 'src/main.py',
+        encoding: 'utf-8',
+        content: ``,
+      },
+    ],
+    toolchain: {
+      runtimeId: 'python-pyodide',
+      requestedVersion: '314.0.7',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }),
+
+  java: () => ({
+    schemaVersion: 1,
+    kind: 'browser-ide-project',
+    id: `proj-java-blank-${Date.now()}`,
+    name: 'Java (Blank)',
+    language: 'java',
+    entrypoint: 'src/demo/Main.java',
+    files: [
+      {
+        path: 'src/demo/Main.java',
+        encoding: 'utf-8',
+        content: `public class Main {
+    public static void main(String[] args) {
+        // Write your solution here
+    }
+}
+`,
+      },
+    ],
+    toolchain: {
+      runtimeId: 'java-ecj-bjvm',
+      requestedVersion: '11',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }),
+
+  cpp: () => ({
+    schemaVersion: 1,
+    kind: 'browser-ide-project',
+    id: `proj-cpp-blank-${Date.now()}`,
+    name: 'C++ (Blank)',
+    language: 'cpp',
+    entrypoint: 'src/main.cpp',
+    files: [
+      {
+        path: 'src/main.cpp',
+        encoding: 'utf-8',
+        content: `#include <iostream>
+
+int main() {
+    // Write your solution here
+    return 0;
+}
+`,
+      },
+    ],
+    toolchain: {
+      runtimeId: 'cpp-yowasp',
+      requestedVersion: '17',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }),
+};
