@@ -111,9 +111,60 @@ export async function compileAndRunJava(
 
   if (options.stdin !== undefined) {
     scope['stdin'] = options.stdin.trim();
-    scope['name'] = options.stdin.trim();
-    scope['line'] = options.stdin.trim();
   }
+
+  // Parse stdin into a sequential line queue
+  const stdinLines: string[] = [];
+  if (options.stdin !== undefined) {
+    if (Array.isArray(options.stdin)) {
+      stdinLines.push(...options.stdin);
+    } else {
+      const normalized = options.stdin.replace(/\r?\n$/, '');
+      if (normalized.length > 0 || options.stdin === '') {
+        stdinLines.push(...normalized.split(/\r?\n/));
+      }
+    }
+  }
+  let stdinIndex = 0;
+  let tokenBuffer: string[] = [];
+
+  const getNextLine = async (promptMsg: string = 'Enter input: '): Promise<string | null> => {
+    if (tokenBuffer.length > 0) {
+      const remaining = tokenBuffer.join(' ');
+      tokenBuffer = [];
+      return remaining;
+    }
+    if (stdinIndex < stdinLines.length) {
+      return stdinLines[stdinIndex++];
+    }
+    if (options.requestStdin) {
+      return await options.requestStdin(promptMsg);
+    }
+    return null;
+  };
+
+  const getNextToken = async (promptMsg: string = 'Enter input: '): Promise<string | null> => {
+    while (tokenBuffer.length === 0) {
+      if (stdinIndex < stdinLines.length) {
+        const line = stdinLines[stdinIndex++];
+        const tokens = line.trim().length > 0 ? line.trim().split(/\s+/) : [];
+        if (tokens.length > 0) {
+          tokenBuffer = tokens;
+          break;
+        }
+      } else if (options.requestStdin) {
+        const line = await options.requestStdin(promptMsg);
+        const tokens = line.trim().length > 0 ? line.trim().split(/\s+/) : [];
+        if (tokens.length > 0) {
+          tokenBuffer = tokens;
+          break;
+        }
+      } else {
+        return null;
+      }
+    }
+    return tokenBuffer.shift() ?? null;
+  };
 
   // 3. Sequential execution of lines inside main method
   const lines = mainFile.content.split('\n');
@@ -140,42 +191,58 @@ export async function compileAndRunJava(
       continue;
     }
 
-    if (rawLine.includes('scanner.hasNextLine()')) {
+    if (rawLine.includes('scanner.hasNext')) {
       continue;
     }
 
-    // Scanner nextLine handling
-    if (rawLine.includes('scanner.nextLine()') || (rawLine.includes('Scanner') && rawLine.includes('nextLine'))) {
-      const varMatch = rawLine.match(/(?:String|var)\s+([A-Za-z0-9_]+)\s*=\s*.*nextLine\(\);?/);
-      let inputVal = options.stdin;
-      if (inputVal === undefined) {
-        if (options.requestStdin) {
-          inputVal = await options.requestStdin('Enter input: ');
-        } else {
-          // Pause execution and emit stdin-request event to the UI
-          const requestId = `java-stdin-${Date.now()}`;
-          options.onEvent?.({
-            type: 'stdin-request',
+    // Scanner input reads: String name = scanner.nextLine(); name = scanner.nextLine(); int age = scanner.nextInt(); etc.
+    const scannerCallMatch = rawLine.match(
+      /(?:(?:(?:String|var|int|double|float|long)\s+)?([A-Za-z0-9_]+)\s*=\s*)?.*scanner\.(nextLine|next|nextInt|nextDouble|nextLong|nextFloat)\s*\(\)\s*;?/
+    );
+    if (scannerCallMatch && !rawLine.startsWith('System.out')) {
+      const varName = scannerCallMatch[1];
+      const method = scannerCallMatch[2];
+
+      let rawVal: string | null;
+      if (method === 'nextLine') {
+        rawVal = await getNextLine('Enter input: ');
+      } else {
+        rawVal = await getNextToken('Enter input: ');
+      }
+
+      if (rawVal === null) {
+        // Pause execution cleanly and emit stdin-request event to the UI
+        const requestId = `java-stdin-${Date.now()}`;
+        options.onEvent?.({
+          type: 'stdin-request',
+          requestId,
+          prompt: 'Enter input: ',
+        });
+        return {
+          stdout,
+          stderr,
+          exitCode: 0,
+          durationMs: Date.now() - startTime,
+          requiresStdin: {
             requestId,
             prompt: 'Enter input: ',
-          });
-          return {
-            stdout,
-            stderr,
-            exitCode: 0,
-            durationMs: Date.now() - startTime,
-            requiresStdin: {
-              requestId,
-              prompt: 'Enter input: ',
-            },
-          };
-        }
+          },
+        };
       }
-      if (varMatch) {
-        scope[varMatch[1]] = inputVal || '';
+
+      let parsedVal: any = rawVal;
+      if (method === 'nextInt' || method === 'nextLong') {
+        const num = parseInt(rawVal.trim(), 10);
+        parsedVal = isNaN(num) ? 0 : num;
+      } else if (method === 'nextDouble' || method === 'nextFloat') {
+        const num = parseFloat(rawVal.trim());
+        parsedVal = isNaN(num) ? 0.0 : num;
       }
-      scope['name'] = inputVal || '';
-      scope['input'] = inputVal || '';
+
+      if (varName) {
+        scope[varName] = parsedVal;
+      }
+      scope['input'] = parsedVal;
       continue;
     }
 
@@ -204,7 +271,29 @@ export async function compileAndRunJava(
     // System.out.println / System.out.print
     const printMatch = rawLine.match(/^System\.out\.print(?:ln)?\s*\(([\s\S]*)\)\s*;?$/);
     if (printMatch) {
-      const expr = printMatch[1].trim();
+      let expr = printMatch[1].trim();
+      if (expr.includes('scanner.nextLine()')) {
+        const inlineInput = await getNextLine('Enter input: ');
+        if (inlineInput === null) {
+          const requestId = `java-stdin-${Date.now()}`;
+          options.onEvent?.({
+            type: 'stdin-request',
+            requestId,
+            prompt: 'Enter input: ',
+          });
+          return {
+            stdout,
+            stderr,
+            exitCode: 0,
+            durationMs: Date.now() - startTime,
+            requiresStdin: {
+              requestId,
+              prompt: 'Enter input: ',
+            },
+          };
+        }
+        expr = expr.replaceAll('scanner.nextLine()', JSON.stringify(inlineInput));
+      }
       let text = evalJavaPrint(expr, scope, options.stdin, helperClasses);
       if (rawLine.includes('println')) {
         text += '\n';
@@ -233,8 +322,8 @@ export async function compileAndRunJava(
       continue;
     }
 
-    // Variable assignment: int x = 42; var msg = "Hello";
-    const assignMatch = rawLine.match(/(?:int|String|double|boolean|var)\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);/);
+    // Variable assignment: int x = 42; var msg = "Hello"; x = 99;
+    const assignMatch = rawLine.match(/(?:(?:int|String|double|boolean|var)\s+)?([A-Za-z0-9_]+)\s*=\s*([^;]+);/);
     if (assignMatch) {
       const varName = assignMatch[1];
       const valExpr = assignMatch[2].trim();

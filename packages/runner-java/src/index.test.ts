@@ -176,4 +176,57 @@ public final class Main {
     expect(step2.exitCode).toBe(0);
     expect(step2.stdout).toContain('Hi Alice!');
   });
+
+  it('supports sequential multiple inputs across multiple turns without skipping', async () => {
+    const multiInputJavaCode = `
+package demo;
+
+import java.util.Scanner;
+
+public final class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello from Java 11+!");
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter your name: ");
+        if (scanner.hasNextLine()) {
+            String name = scanner.nextLine();
+            System.out.println("Hi " + name + "!");
+            name = scanner.nextLine();
+            System.out.println("Hi " + name + "!");
+        }
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-multi-input-test',
+      name: 'Java Multi-Input Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: multiInputJavaCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Step 1: Initial run with no input -> pauses at 1st nextLine()
+    const step1 = await compileAndRunJava(project);
+    expect(step1.requiresStdin).toBeDefined();
+    expect(step1.stdout).toBe('Hello from Java 11+!\nEnter your name: ');
+
+    // Step 2: Supply first input "qwe" -> consumes "qwe", prints "Hi qwe!\n", pauses at 2nd nextLine()
+    const step2 = await compileAndRunJava(project, {
+      stdin: 'qwe',
+    });
+    expect(step2.requiresStdin).toBeDefined();
+    expect(step2.stdout).toBe('Hello from Java 11+!\nEnter your name: Hi qwe!\n');
+
+    // Step 3: Supply both inputs "qwe" and "res" -> consumes both, prints both, completes with exit code 0
+    const step3 = await compileAndRunJava(project, {
+      stdin: 'qwe\nres',
+    });
+    expect(step3.requiresStdin).toBeUndefined();
+    expect(step3.exitCode).toBe(0);
+    expect(step3.stdout).toBe('Hello from Java 11+!\nEnter your name: Hi qwe!\nHi res!\n');
+  });
 });
