@@ -742,6 +742,7 @@ export const App: React.FC = () => {
                       content={activeFile.content}
                       syntaxColoring={syntaxColoring}
                       onToggleSyntaxColoring={handleToggleSyntaxColoring}
+                      showColoringButton={initialHash.highlight !== false}
                       codeSuggest={codeSuggest}
                       onToggleCodeSuggest={(enabled) => {
                         setCodeSuggest(enabled);
@@ -752,6 +753,7 @@ export const App: React.FC = () => {
                           file: activeFilePath,
                         });
                       }}
+                      showSuggestButton={initialHash.codeSuggest !== false}
                       allFilePaths={project.files.map((f) => f.path)}
                       onChange={handleContentChange}
                     />

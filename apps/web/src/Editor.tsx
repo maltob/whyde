@@ -15,8 +15,10 @@ interface EditorProps {
   content: string;
   syntaxColoring?: boolean;
   onToggleSyntaxColoring?: (enabled: boolean) => void;
+  showColoringButton?: boolean;
   codeSuggest?: boolean;
   onToggleCodeSuggest?: (enabled: boolean) => void;
+  showSuggestButton?: boolean;
   allFilePaths?: string[];
   onChange: (newContent: string) => void;
 }
@@ -45,8 +47,10 @@ export const Editor: React.FC<EditorProps> = ({
   content,
   syntaxColoring = true,
   onToggleSyntaxColoring,
+  showColoringButton = true,
   codeSuggest = true,
   onToggleCodeSuggest,
+  showSuggestButton = true,
   allFilePaths = [],
   onChange,
 }) => {
@@ -299,47 +303,51 @@ export const Editor: React.FC<EditorProps> = ({
           {filePath}
         </div>
 
-        {/* Toolbar: Color Coding Toggle & Code Formatter */}
+        {/* Toolbar: Suggestion Toggle, Color Coding Toggle & Code Formatter */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            title="Toggle Code Suggestions"
-            onClick={toggleSuggest}
-            style={{
-              background: activeSuggest ? '#1e293b' : 'transparent',
-              border: '1px solid #334155',
-              color: activeSuggest ? '#38bdf8' : '#64748b',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <Sparkles size={13} />
-            <span>Suggest: {activeSuggest ? 'ON' : 'OFF'}</span>
-          </button>
+          {showSuggestButton && (
+            <button
+              title="Toggle Code Suggestions"
+              onClick={toggleSuggest}
+              style={{
+                background: activeSuggest ? '#1e293b' : 'transparent',
+                border: '1px solid #334155',
+                color: activeSuggest ? '#38bdf8' : '#64748b',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Sparkles size={13} />
+              <span>Suggest: {activeSuggest ? 'ON' : 'OFF'}</span>
+            </button>
+          )}
 
-          <button
-            title="Toggle Syntax Highlighting"
-            onClick={toggleColoring}
-            style={{
-              background: activeColoring ? '#1e293b' : 'transparent',
-              border: '1px solid #334155',
-              color: activeColoring ? '#38bdf8' : '#64748b',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <Palette size={13} />
-            <span>Highlighting: {activeColoring ? 'ON' : 'OFF'}</span>
-          </button>
+          {showColoringButton && (
+            <button
+              title="Toggle Syntax Highlighting"
+              onClick={toggleColoring}
+              style={{
+                background: activeColoring ? '#1e293b' : 'transparent',
+                border: '1px solid #334155',
+                color: activeColoring ? '#38bdf8' : '#64748b',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Palette size={13} />
+              <span>Highlighting: {activeColoring ? 'ON' : 'OFF'}</span>
+            </button>
+          )}
 
           <button
             title="Format Code"
