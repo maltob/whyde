@@ -130,13 +130,38 @@ function buildYoWASPFileSystem(files: Record<string, string>): Record<string, an
   return root;
 }
 
+const projectBinaryCache = new Map<string, Uint8Array>();
+const objectFileCache = new Map<string, Uint8Array>();
+
+function hashString(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
+function hashProject(files: Record<string, string>, standard: string): string {
+  const keys = Object.keys(files).sort();
+  let str = `${standard}\0`;
+  for (const k of keys) {
+    str += `${k}\0${files[k]}\0`;
+  }
+  return hashString(str);
+}
+
 export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<CompileAndRunResult> {
   const { files, standard = 'c++17', stdin, requestStdin, compiledWasm, onStdout, onStderr, onInfo, onEvent } = options;
 
   let wasmBinary: Uint8Array;
+  const projectKey = hashProject(files, standard);
 
   if (compiledWasm) {
     wasmBinary = compiledWasm;
+  } else if (projectBinaryCache.has(projectKey)) {
+    wasmBinary = projectBinaryCache.get(projectKey)!;
+    onInfo?.(`Using cached WebAssembly binary (${wasmBinary.length} bytes). Executing WASI binary...\n`);
   } else {
     onInfo?.(`Compiling ${Object.keys(files).length} translation unit(s) with Clang (${standard})...\n`);
 
@@ -155,30 +180,94 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<C
     }
     const includeFlags = Array.from(includeDirs).map((d) => `-I${d}`);
 
-    const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, ...cppFiles, '-o', 'out.wasm'];
-
+    // If multi-file project with unchanged files, perform incremental object file compilation
+    let compileResultFiles: any;
     let compileStderr = '';
     let compileStdout = '';
 
-    let compileResultFiles: any;
-    try {
-      compileResultFiles = await commands['clang++'](clangArgs, yoWASPFiles, {
-        stdout: (chunk: Uint8Array | null) => {
-          if (!chunk) return;
-          compileStdout += new TextDecoder().decode(chunk);
-        },
-        stderr: (chunk: Uint8Array | null) => {
-          if (!chunk) return;
-          compileStderr += new TextDecoder().decode(chunk);
-        },
-      });
-    } catch (err: any) {
-      if (compileStderr) {
-        onStderr(compileStderr);
-      } else {
-        onStderr(`Compilation error: ${err?.message || err}\n`);
+    if (cppFiles.length > 1) {
+      const objFiles: Record<string, Uint8Array> = {};
+      const objPathsToLink: string[] = [];
+
+      for (const cppPath of cppFiles) {
+        const fileContent = files[cppPath];
+        const fileKey = hashString(`${standard}\0${cppPath}\0${fileContent}`);
+        const objFileName = `${cppPath.replace(/[/\\]+/g, '_')}.o`;
+        objPathsToLink.push(objFileName);
+
+        if (objectFileCache.has(fileKey)) {
+          objFiles[objFileName] = objectFileCache.get(fileKey)!;
+        } else {
+          // Compile single compilation unit to .o
+          let singleStderr = '';
+          try {
+            const singleRes = await commands['clang++'](
+              [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, '-c', cppPath, '-o', objFileName],
+              yoWASPFiles,
+              {
+                stdout: () => {},
+                stderr: (chunk: Uint8Array | null) => {
+                  if (chunk) singleStderr += new TextDecoder().decode(chunk);
+                },
+              }
+            );
+            if (singleRes && singleRes[objFileName]) {
+              const rawObj = singleRes[objFileName];
+              const objData = rawObj instanceof Uint8Array
+                ? new Uint8Array(rawObj.buffer.slice(rawObj.byteOffset, rawObj.byteOffset + rawObj.byteLength))
+                : new TextEncoder().encode(String(rawObj));
+              objectFileCache.set(fileKey, objData);
+              objFiles[objFileName] = objData;
+            } else {
+              throw new Error(singleStderr || `Failed to compile ${cppPath}`);
+            }
+          } catch (err: any) {
+            onStderr(singleStderr || `Compilation error in ${cppPath}: ${err?.message || err}\n`);
+            return { exitCode: 1 };
+          }
+        }
       }
-      return { exitCode: 1 };
+
+      // Link cached object files
+      try {
+        compileResultFiles = await commands['clang++'](
+          [`-std=${standard}`, ...objPathsToLink, '-o', 'out.wasm'],
+          objFiles,
+          {
+            stdout: (chunk: Uint8Array | null) => {
+              if (chunk) compileStdout += new TextDecoder().decode(chunk);
+            },
+            stderr: (chunk: Uint8Array | null) => {
+              if (chunk) compileStderr += new TextDecoder().decode(chunk);
+            },
+          }
+        );
+      } catch (err: any) {
+        onStderr(compileStderr || `Linker error: ${err?.message || err}\n`);
+        return { exitCode: 1 };
+      }
+    } else {
+      // Single-file direct compilation
+      const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, ...cppFiles, '-o', 'out.wasm'];
+      try {
+        compileResultFiles = await commands['clang++'](clangArgs, yoWASPFiles, {
+          stdout: (chunk: Uint8Array | null) => {
+            if (!chunk) return;
+            compileStdout += new TextDecoder().decode(chunk);
+          },
+          stderr: (chunk: Uint8Array | null) => {
+            if (!chunk) return;
+            compileStderr += new TextDecoder().decode(chunk);
+          },
+        });
+      } catch (err: any) {
+        if (compileStderr) {
+          onStderr(compileStderr);
+        } else {
+          onStderr(`Compilation error: ${err?.message || err}\n`);
+        }
+        return { exitCode: 1 };
+      }
     }
 
     if (compileStderr) {
@@ -195,6 +284,7 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<C
       ? new Uint8Array(wasmBinaryRaw.buffer.slice(wasmBinaryRaw.byteOffset, wasmBinaryRaw.byteOffset + wasmBinaryRaw.byteLength))
       : new Uint8Array(wasmBinaryRaw);
 
+    projectBinaryCache.set(projectKey, wasmBinary);
     onInfo?.(`Compilation successful (${wasmBinary.length} bytes). Executing WASI binary...\n`);
   }
 

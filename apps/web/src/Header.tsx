@@ -1,11 +1,12 @@
 import React from 'react';
-import { Play, Square, Save, HardDrive, WifiOff } from 'lucide-react';
+import { Play, Square, Save, HardDrive, WifiOff, Loader2 } from 'lucide-react';
 import { Project } from '@ide/project-model';
 
 interface HeaderProps {
   project: Project;
   saveStatus: 'saved' | 'saving' | 'error';
   isRunning: boolean;
+  executionPhase?: 'idle' | 'compiling' | 'running';
   hideNewProject?: boolean;
   onRun: () => void;
   onStop: () => void;
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   project,
   saveStatus,
   isRunning,
+  executionPhase = isRunning ? 'running' : 'idle',
   hideNewProject = false,
   onRun,
   onStop,
@@ -141,8 +143,30 @@ export const Header: React.FC<HeaderProps> = ({
           </select>
         )}
 
-        {/* Run / Stop buttons */}
-        {!isRunning ? (
+        {/* Run / Compiling / Stop buttons */}
+        {executionPhase === 'compiling' ? (
+          <button
+            aria-label="Compiling Code"
+            onClick={onStop}
+            style={{
+              backgroundColor: '#0284c7',
+              color: 'white',
+              border: 'none',
+              padding: '6px 14px',
+              borderRadius: '4px',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 0 12px rgba(2, 132, 199, 0.4)',
+            }}
+          >
+            <Loader2 size={14} className="animate-spin" />
+            Compiling...
+          </button>
+        ) : !isRunning ? (
           <button
             aria-label="Run Code"
             onClick={onRun}

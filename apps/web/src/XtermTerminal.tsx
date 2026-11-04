@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import { Terminal as TerminalIcon, Trash2, Maximize2, Minimize2 } from 'lucide-react';
 
 export interface TerminalProps {
   logs: { type: 'stdout' | 'stderr' | 'info'; text: string }[];
@@ -11,6 +11,9 @@ export interface TerminalProps {
   onData?: (data: string) => void;
   onClear: () => void;
   rawMode?: boolean; // When true, passes every character directly without local line editing
+  height?: number | string;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
 }
 
 export const XtermTerminal: React.FC<TerminalProps> = ({
@@ -20,6 +23,9 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
   onData,
   onClear,
   rawMode = false,
+  height = 240,
+  isMaximized = false,
+  onToggleMaximize,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -174,16 +180,25 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
     onClear();
   };
 
+  // Refit whenever height or isMaximized changes
+  useEffect(() => {
+    try {
+      fitAddonRef.current?.fit();
+    } catch {}
+  }, [height, isMaximized]);
+
   return (
     <section
       aria-label="Interactive Terminal Emulator and Output"
       style={{
-        height: '240px',
+        height: isMaximized ? '100%' : typeof height === 'number' ? `${height}px` : height,
+        flex: isMaximized ? 1 : undefined,
         backgroundColor: '#090d16',
         color: '#f8fafc',
-        borderTop: '1px solid #334155',
+        borderTop: isMaximized ? 'none' : '1px solid #334155',
         display: 'flex',
         flexDirection: 'column',
+        minHeight: '80px',
       }}
     >
       <div
@@ -202,23 +217,43 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
           <TerminalIcon size={14} />
           <span>TERMINAL EMULATOR (VT100 / XTERM)</span>
         </div>
-        <button
-          aria-label="Clear Console"
-          onClick={handleClear}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#64748b',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '0.75rem',
-          }}
-        >
-          <Trash2 size={12} />
-          Clear
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            aria-label="Clear Console"
+            onClick={handleClear}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '0.75rem',
+            }}
+          >
+            <Trash2 size={12} />
+            Clear
+          </button>
+          {onToggleMaximize && (
+            <button
+              aria-label={isMaximized ? 'Restore Terminal' : 'Maximize Terminal'}
+              title={isMaximized ? 'Restore' : 'Maximize'}
+              onClick={onToggleMaximize}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#64748b',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px',
+              }}
+            >
+              {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          )}
+        </div>
       </div>
 
       <div

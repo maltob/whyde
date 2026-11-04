@@ -166,4 +166,30 @@ int main() {
     expect(res4.requiresStdin).toBeUndefined();
     expect(out4).toBe('First number: Second number: Your message: Sum: 100 Message: Hello World\n');
   }, 30000);
+
+  it('uses cached WebAssembly binary on repeated run without recompiling', async () => {
+    const code = `#include <iostream>
+int main() { std::cout << "Cached binary test" << std::endl; return 0; }
+`;
+    let infoLogs1 = '';
+    const res1 = await compileAndRunCpp({
+      files: { 'src/main.cpp': code },
+      onInfo: (text) => { infoLogs1 += text; },
+      onStdout: () => {},
+      onStderr: () => {},
+    });
+    expect(res1.exitCode).toBe(0);
+    expect(infoLogs1).toContain('Compiling');
+
+    // Second run with same files - should hit binary cache
+    let infoLogs2 = '';
+    const res2 = await compileAndRunCpp({
+      files: { 'src/main.cpp': code },
+      onInfo: (text) => { infoLogs2 += text; },
+      onStdout: () => {},
+      onStderr: () => {},
+    });
+    expect(res2.exitCode).toBe(0);
+    expect(infoLogs2).toContain('Using cached WebAssembly binary');
+  }, 30000);
 });

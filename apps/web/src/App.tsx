@@ -36,11 +36,40 @@ export const App: React.FC = () => {
   });
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [executionPhase, setExecutionPhase] = useState<'idle' | 'compiling' | 'running'>('idle');
+  const [terminalHeight, setTerminalHeight] = useState<number>(240);
+  const [isTerminalMaximized, setIsTerminalMaximized] = useState<boolean>(false);
+  const [activeCenterTab, setActiveCenterTab] = useState<'editor' | 'terminal'>('editor');
+  const isDraggingSplitterRef = useRef<boolean>(false);
+
   const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info'; text: string }[]>([]);
   const [pendingStdin, setPendingStdin] = useState<{ requestId: string; prompt?: string } | null>(null);
   const [suppliedInputs, setSuppliedInputs] = useState<string[]>([]);
   const lastOutputLengthRef = useRef<number>(0);
   const compiledWasmRef = useRef<Uint8Array | null>(null);
+
+  const handleSplitterMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingSplitterRef.current = true;
+    const startY = e.clientY;
+    const startHeight = terminalHeight;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingSplitterRef.current) return;
+      const deltaY = moveEvent.clientY - startY;
+      const newHeight = Math.max(80, Math.min(window.innerHeight - 150, startHeight - deltaY));
+      setTerminalHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      isDraggingSplitterRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
@@ -228,6 +257,7 @@ export const App: React.FC = () => {
 
   const handleRun = () => {
     setIsRunning(true);
+    setExecutionPhase(project.language === 'cpp' ? 'compiling' : 'running');
     setSuppliedInputs([]);
     lastOutputLengthRef.current = 0;
     setLogs((prev) => [
@@ -284,6 +314,9 @@ export const App: React.FC = () => {
         standard: 'c++17',
         stdin: undefined,
         onInfo: (text) => {
+          if (text.includes('Executing WASI binary') || text.includes('Using cached')) {
+            setExecutionPhase('running');
+          }
           setLogs((prev) => [...prev, { type: 'info', text }]);
         },
         onStdout: (text) => {
@@ -318,11 +351,13 @@ export const App: React.FC = () => {
               { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
             ]);
             setPendingStdin(null);
+            setExecutionPhase('idle');
             setIsRunning(false);
           }
         },
         (err) => {
           setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setExecutionPhase('idle');
           setIsRunning(false);
         }
       );
@@ -469,11 +504,13 @@ export const App: React.FC = () => {
               { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
             ]);
             setPendingStdin(null);
+            setExecutionPhase('idle');
             setIsRunning(false);
           }
         },
         (err) => {
           setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setExecutionPhase('idle');
           setIsRunning(false);
         }
       );
@@ -517,11 +554,13 @@ export const App: React.FC = () => {
               { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
             ]);
             setPendingStdin(null);
+            setExecutionPhase('idle');
             setIsRunning(false);
           }
         },
         (err) => {
           setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setExecutionPhase('idle');
           setIsRunning(false);
         }
       );
@@ -564,6 +603,7 @@ export const App: React.FC = () => {
 
   const handleStop = () => {
     setIsRunning(false);
+    setExecutionPhase('idle');
     setPendingStdin(null);
     setLogs((prev) => [
       ...prev,
@@ -604,6 +644,7 @@ export const App: React.FC = () => {
         project={project}
         saveStatus={saveStatus}
         isRunning={isRunning}
+        executionPhase={executionPhase}
         hideNewProject={initialHash.hideNewProject}
         onRun={handleRun}
         onStop={handleStop}
@@ -621,19 +662,111 @@ export const App: React.FC = () => {
           onDuplicateFile={handleDuplicateFile}
         />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          <Editor
-            filePath={activeFile.path}
-            content={activeFile.content}
-            syntaxColoring={syntaxColoring}
-            onToggleSyntaxColoring={handleToggleSyntaxColoring}
-            onChange={handleContentChange}
-          />
-          <XtermTerminal
-            logs={logs}
-            pendingStdin={pendingStdin}
-            onSupplyStdin={handleSupplyStdin}
-            onClear={() => setLogs([])}
-          />
+          {/* Main Workspace Top Tabs (Editor / Terminal) */}
+          <div
+            style={{
+              display: 'flex',
+              backgroundColor: '#090d16',
+              borderBottom: '1px solid #1e293b',
+              paddingLeft: '6px',
+            }}
+          >
+            <button
+              onClick={() => setActiveCenterTab('editor')}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: activeCenterTab === 'editor' ? '#1e293b' : 'transparent',
+                color: activeCenterTab === 'editor' ? '#38bdf8' : '#94a3b8',
+                border: 'none',
+                borderBottom: activeCenterTab === 'editor' ? '2px solid #38bdf8' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <span>{activeFile.path.split('/').pop()}</span>
+            </button>
+            <button
+              onClick={() => setActiveCenterTab('terminal')}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: activeCenterTab === 'terminal' ? '#1e293b' : 'transparent',
+                color: activeCenterTab === 'terminal' ? '#38bdf8' : '#94a3b8',
+                border: 'none',
+                borderBottom: activeCenterTab === 'terminal' ? '2px solid #38bdf8' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <span>Terminal Tab</span>
+            </button>
+          </div>
+
+          {activeCenterTab === 'editor' && !isTerminalMaximized && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <Editor
+                filePath={activeFile.path}
+                content={activeFile.content}
+                syntaxColoring={syntaxColoring}
+                onToggleSyntaxColoring={handleToggleSyntaxColoring}
+                onChange={handleContentChange}
+              />
+            </div>
+          )}
+
+          {/* Draggable Splitter between Editor and Terminal */}
+          {activeCenterTab === 'editor' && !isTerminalMaximized && (
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              title="Drag up or down to resize terminal"
+              onMouseDown={handleSplitterMouseDown}
+              style={{
+                height: '4px',
+                backgroundColor: '#1e293b',
+                cursor: 'row-resize',
+                transition: 'background-color 0.15s ease',
+                userSelect: 'none',
+                zIndex: 10,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#38bdf8')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
+            />
+          )}
+
+          <div
+            style={{
+              height: activeCenterTab === 'terminal' || isTerminalMaximized ? '100%' : `${terminalHeight}px`,
+              display: activeCenterTab === 'editor' && !isTerminalMaximized && terminalHeight === 0 ? 'none' : 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              flex: activeCenterTab === 'terminal' || isTerminalMaximized ? 1 : undefined,
+            }}
+          >
+            <XtermTerminal
+              logs={logs}
+              pendingStdin={pendingStdin}
+              onSupplyStdin={handleSupplyStdin}
+              onClear={() => setLogs([])}
+              height="100%"
+              isMaximized={isTerminalMaximized || activeCenterTab === 'terminal'}
+              onToggleMaximize={() => {
+                if (activeCenterTab === 'terminal') {
+                  setActiveCenterTab('editor');
+                  setIsTerminalMaximized(false);
+                } else {
+                  setIsTerminalMaximized((prev) => !prev);
+                }
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

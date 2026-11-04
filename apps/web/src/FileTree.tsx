@@ -638,7 +638,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
         </form>
       )}
 
-      <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+      <div
+        data-empty-drop-zone="true"
+        onContextMenu={(e) => {
+          if (e.target === e.currentTarget || (e.target as HTMLElement).getAttribute('data-empty-drop-zone')) {
+            handleContextMenu(e, '', 'Root', true);
+          }
+        }}
+        style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}
+      >
         {renderTree(tree)}
       </div>
 
@@ -725,7 +733,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 onMouseLeave={menuItemLeave}
               >
                 <FilePlus size={13} color="#38bdf8" />
-                <span>New File Here</span>
+                <span>{contextMenu.path ? 'New File Here' : 'New File in Root'}</span>
               </button>
               <button
                 onClick={() => {
@@ -739,7 +747,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 onMouseLeave={menuItemLeave}
               >
                 <FolderPlus size={13} color="#38bdf8" />
-                <span>New Folder Here</span>
+                <span>{contextMenu.path ? 'New Folder Here' : 'New Folder in Root'}</span>
               </button>
             </>
           )}
