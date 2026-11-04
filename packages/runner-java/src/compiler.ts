@@ -138,6 +138,19 @@ const javaFloat = {
   toString: (s: any) => String(s),
 };
 
+const javaCharacter = {
+  isDigit: (c: any) => /^\d$/.test(String(c)),
+  isLetter: (c: any) => /^[a-zA-Z]$/.test(String(c)),
+  isLetterOrDigit: (c: any) => /^[a-zA-Z0-9]$/.test(String(c)),
+  isWhitespace: (c: any) => /^\s$/.test(String(c)),
+  isUpperCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toUpperCase() && c !== c.toLowerCase(),
+  isLowerCase: (c: any) => typeof c === 'string' && c.length === 1 && c === c.toLowerCase() && c !== c.toUpperCase(),
+  toUpperCase: (c: any) => String(c).toUpperCase(),
+  toLowerCase: (c: any) => String(c).toLowerCase(),
+  toString: (c: any) => String(c),
+  valueOf: (c: any) => String(c).charAt(0),
+};
+
 const javaArrays = {
   toString: (arr: any) => (Array.isArray(arr) ? `[${arr.join(', ')}]` : String(arr)),
   sort: (arr: any) => {
@@ -154,6 +167,44 @@ const javaArrays = {
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
     return true;
   },
+};
+
+const javaCollections = {
+  sort: (list: any[]) => {
+    if (Array.isArray(list)) list.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return list;
+  },
+  reverse: (list: any[]) => {
+    if (Array.isArray(list)) list.reverse();
+    return list;
+  },
+  min: (list: any[]) => {
+    if (Array.isArray(list) && list.length > 0) return Math.min(...list.map(Number));
+    return null;
+  },
+  max: (list: any[]) => {
+    if (Array.isArray(list) && list.length > 0) return Math.max(...list.map(Number));
+    return null;
+  },
+  shuffle: (list: any[]) => {
+    if (Array.isArray(list)) list.sort(() => Math.random() - 0.5);
+    return list;
+  },
+};
+
+const createJavaRandom = (seed?: number) => ({
+  nextInt: (bound?: number) => {
+    if (bound !== undefined) return Math.floor(Math.random() * bound);
+    return Math.floor(Math.random() * 2147483647);
+  },
+  nextDouble: () => Math.random(),
+  nextFloat: () => Math.random(),
+  nextBoolean: () => Math.random() >= 0.5,
+  nextLong: () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER),
+});
+
+const javaRandomClass = function (seed?: number) {
+  return createJavaRandom(seed);
 };
 
 function formatJavaString(formatStr: string, args: any[]): string {
@@ -245,16 +296,23 @@ function evalJavaExpr(
   clean = clean.replace(/new\s+[A-Za-z0-9_<>[\]]+?\s*\{/g, '{');
   clean = clean.replace(/\{([^{}]*)\}/g, '[$1]');
 
+  // Support Random instantiation: new Random()
+  clean = clean.replace(/new\s+Random\s*\([^)]*\)/g, 'createJavaRandom()');
+
+  // Support type casts
+  clean = clean.replace(/\(int\)\s*('[^']')/g, (_, ch) => String(ch.charCodeAt(1)));
+  clean = clean.replace(/\(char\)\s*(\d+)/g, (_, code) => JSON.stringify(String.fromCharCode(parseInt(code, 10))));
+  clean = clean.replace(/\(int\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Math.floor($1)');
+  clean = clean.replace(/\(double\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Number($1)');
+  clean = clean.replace(/\(float\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Number($1)');
+  clean = clean.replace(/\(long\)\s*([A-Za-z0-9_.]+|\([^)]+\))/g, 'Math.floor($1)');
+
   // Convert new int[size] -> Array(size).fill(0)
-  const newArrayMatch = clean.match(/^new\s+(?:int|double|float|long|boolean|String|var)\[([^\]]*)\](?:\s*\{([^}]*)\})?$/i);
+  const newArrayMatch = clean.match(/^new\s+(?:int|double|float|long|boolean|String|var)\[([^\]]*)\](?:\s*\[([^\]]*)\])?$/i);
   if (newArrayMatch) {
-    if (newArrayMatch[2] !== undefined) {
-      clean = '[' + newArrayMatch[2] + ']';
-    } else {
-      const sizeExpr = newArrayMatch[1].trim();
-      const sizeVal = sizeExpr ? evalJavaExpr(sizeExpr, scope, helperClasses) : 0;
-      return new Array(Math.max(0, parseInt(String(sizeVal), 10) || 0)).fill(0);
-    }
+    const sizeExpr = newArrayMatch[1].trim();
+    const sizeVal = sizeExpr ? evalJavaExpr(sizeExpr, scope, helperClasses) : 0;
+    return new Array(Math.max(0, parseInt(String(sizeVal), 10) || 0)).fill(0);
   }
 
   // Convert new ArrayList(...) -> []
@@ -292,7 +350,11 @@ function evalJavaExpr(
       'Boolean',
       'Long',
       'Float',
+      'Character',
       'Arrays',
+      'Collections',
+      'Random',
+      'createJavaRandom',
       'Math',
       `return (${clean});`
     );
@@ -303,7 +365,11 @@ function evalJavaExpr(
       javaBoolean,
       javaLong,
       javaFloat,
+      javaCharacter,
       javaArrays,
+      javaCollections,
+      javaRandomClass,
+      createJavaRandom,
       Math
     );
   } catch {
@@ -312,6 +378,122 @@ function evalJavaExpr(
     }
     return clean;
   }
+}
+
+interface ASTNode {
+  type: 'stmt' | 'if' | 'while' | 'for' | 'for-each';
+  line?: string;
+  cond?: string;
+  init?: string;
+  update?: string;
+  varName?: string;
+  iterExpr?: string;
+  body?: ASTNode[];
+  elseIfs?: { cond: string; body: ASTNode[] }[];
+  elseBody?: ASTNode[];
+}
+
+function parseBlocks(rawLines: string[]): ASTNode[] {
+  let i = 0;
+
+  function parseSequence(stopAtBrace = false): ASTNode[] {
+    const nodes: ASTNode[] = [];
+
+    while (i < rawLines.length) {
+      const line = rawLines[i].trim();
+      if (!line) {
+        i++;
+        continue;
+      }
+
+      if (stopAtBrace && (line === '}' || line.startsWith('}'))) {
+        break;
+      }
+
+      // If statement: if (cond) { ... }
+      const ifMatch = line.match(/^if\s*\(([\s\S]*)\)\s*\{?$/);
+      if (ifMatch && !line.includes('scanner.hasNext')) {
+        const cond = ifMatch[1];
+        i++;
+        const ifBody = parseSequence(true);
+        if (i < rawLines.length && rawLines[i].trim().startsWith('}')) {
+          const cur = rawLines[i].trim();
+          if (cur === '}') {
+            i++;
+          }
+        }
+
+        const elseIfs: { cond: string; body: ASTNode[] }[] = [];
+        let elseBody: ASTNode[] | undefined = undefined;
+
+        while (i < rawLines.length) {
+          const next = rawLines[i].trim();
+          if (next.startsWith('else if') || next.startsWith('} else if')) {
+            const elseIfMatch = next.match(/else\s+if\s*\(([\s\S]*)\)\s*\{?$/);
+            const elseIfCond = elseIfMatch ? elseIfMatch[1] : 'false';
+            i++;
+            const b = parseSequence(true);
+            if (i < rawLines.length && rawLines[i].trim() === '}') i++;
+            elseIfs.push({ cond: elseIfCond, body: b });
+          } else if (next.startsWith('else') || next.startsWith('} else')) {
+            i++;
+            elseBody = parseSequence(true);
+            if (i < rawLines.length && rawLines[i].trim() === '}') i++;
+            break;
+          } else {
+            break;
+          }
+        }
+
+        nodes.push({ type: 'if', cond, body: ifBody, elseIfs, elseBody });
+        continue;
+      }
+
+      // While loop: while (cond) { ... }
+      const whileMatch = line.match(/^while\s*\(([\s\S]*)\)\s*\{?$/);
+      if (whileMatch && !line.includes('while (true)') && !line.includes('for (;;)')) {
+        const cond = whileMatch[1];
+        i++;
+        const body = parseSequence(true);
+        if (i < rawLines.length && rawLines[i].trim() === '}') i++;
+        nodes.push({ type: 'while', cond, body });
+        continue;
+      }
+
+      // Enhanced for-each loop: for (String s : list) { ... }
+      const forEachMatch = line.match(/^for\s*\((?:[A-Za-z0-9_<>[\]]+\s+)?([A-Za-z0-9_]+)\s*:\s*([^)]+)\)\s*\{?$/);
+      if (forEachMatch) {
+        const varName = forEachMatch[1];
+        const iterExpr = forEachMatch[2];
+        i++;
+        const body = parseSequence(true);
+        if (i < rawLines.length && rawLines[i].trim() === '}') i++;
+        nodes.push({ type: 'for-each', varName, iterExpr, body });
+        continue;
+      }
+
+      // Standard for loop: for (int i = 0; i < n; i++) { ... }
+      const forMatch = line.match(/^for\s*\(([^;]+);([^;]+);([^)]+)\)\s*\{?$/);
+      if (forMatch) {
+        const init = forMatch[1].trim();
+        const cond = forMatch[2].trim();
+        const update = forMatch[3].trim();
+        i++;
+        const body = parseSequence(true);
+        if (i < rawLines.length && rawLines[i].trim() === '}') i++;
+        nodes.push({ type: 'for', init, cond, update, body });
+        continue;
+      }
+
+      // Regular statement
+      nodes.push({ type: 'stmt', line });
+      i++;
+    }
+
+    return nodes;
+  }
+
+  return parseSequence(false);
 }
 
 export async function compileAndRunJava(
@@ -655,7 +837,7 @@ export async function compileAndRunJava(
       return;
     }
 
-    // ArrayList add
+    // ArrayList add: list.add(val)
     const addMatch = rawLine.match(/([A-Za-z0-9_]+)\.add\(([^)]+)\);/);
     if (addMatch) {
       const listName = addMatch[1];
@@ -676,71 +858,91 @@ export async function compileAndRunJava(
     }
   };
 
-  // 3. Sequential execution of lines inside main method
-  const lines = mainFile.content.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i].trim();
-    if (!rawLine) continue;
-
-    // For loop handling: for (int i = 0; i < n; i++) { ... }
-    const forMatch = rawLine.match(/^for\s*\(([^;]+);([^;]+);([^)]+)\)\s*\{?$/);
-    if (forMatch) {
-      const initStmt = forMatch[1].trim();
-      const condExpr = forMatch[2].trim();
-      const updateStmt = forMatch[3].trim();
-
-      let bodyEnd = i + 1;
-      let depth = rawLine.endsWith('{') ? 1 : 0;
-      const bodyLines: string[] = [];
-
-      while (bodyEnd < lines.length) {
-        const bl = lines[bodyEnd].trim();
-        if (bl === '{') {
-          depth++;
-        } else if (bl === '}' || bl.endsWith('}')) {
-          depth--;
-          if (depth <= 0) break;
-        } else if (depth > 0) {
-          bodyLines.push(bl);
-        }
-        bodyEnd++;
-      }
-
-      // Execute loop init
-      await executeStatement(initStmt.endsWith(';') ? initStmt : initStmt + ';');
-
-      let iters = 0;
-      while (evalJavaExpr(condExpr, scope, helperClasses) && iters < 10000) {
-        iters++;
-        for (const bLine of bodyLines) {
-          const res = await executeStatement(bLine);
-          if (res?.requiresStdin) {
-            return {
-              stdout,
-              stderr,
-              exitCode: 0,
-              durationMs: Date.now() - startTime,
-              requiresStdin: res.requiresStdin,
-            };
-          }
-          if (res?.shouldExit) {
-            return {
-              stdout,
-              stderr,
-              exitCode: res.exitCode || 0,
-              durationMs: Date.now() - startTime,
-            };
-          }
-        }
-        // Execute update statement
-        await executeStatement(updateStmt.endsWith(';') ? updateStmt : updateStmt + ';');
-      }
-
-      i = bodyEnd;
-      continue;
+  const executeNode = async (node: ASTNode): Promise<{ requiresStdin?: { requestId: string; prompt: string }; shouldExit?: boolean; exitCode?: number } | void> => {
+    if (node.type === 'stmt') {
+      return await executeStatement(node.line!);
     }
 
-    const res = await executeStatement(rawLine);
+    if (node.type === 'if') {
+      const isTrue = Boolean(evalJavaExpr(node.cond!, scope, helperClasses));
+      if (isTrue) {
+        for (const child of node.body || []) {
+          const res = await executeNode(child);
+          if (res) return res;
+        }
+      } else {
+        let matchedElseIf = false;
+        for (const branch of node.elseIfs || []) {
+          if (evalJavaExpr(branch.cond, scope, helperClasses)) {
+            matchedElseIf = true;
+            for (const child of branch.body) {
+              const res = await executeNode(child);
+              if (res) return res;
+            }
+            break;
+          }
+        }
+        if (!matchedElseIf && node.elseBody) {
+          for (const child of node.elseBody) {
+            const res = await executeNode(child);
+            if (res) return res;
+          }
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'while') {
+      let iters = 0;
+      while (evalJavaExpr(node.cond!, scope, helperClasses) && iters < 10000) {
+        iters++;
+        for (const child of node.body || []) {
+          const res = await executeNode(child);
+          if (res) return res;
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'for') {
+      if (node.init) {
+        await executeStatement(node.init.endsWith(';') ? node.init : node.init + ';');
+      }
+      let iters = 0;
+      while (evalJavaExpr(node.cond!, scope, helperClasses) && iters < 10000) {
+        iters++;
+        for (const child of node.body || []) {
+          const res = await executeNode(child);
+          if (res) return res;
+        }
+        if (node.update) {
+          await executeStatement(node.update.endsWith(';') ? node.update : node.update + ';');
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'for-each') {
+      const collection = evalJavaExpr(node.iterExpr!, scope, helperClasses);
+      if (Array.isArray(collection)) {
+        for (const item of collection) {
+          scope[node.varName!] = item;
+          for (const child of node.body || []) {
+            const res = await executeNode(child);
+            if (res) return res;
+          }
+        }
+      }
+      return;
+    }
+  };
+
+  // 3. Sequential execution of lines inside main method
+  const lines = mainFile.content.split('\n');
+  const astRoot = parseBlocks(lines);
+
+  for (const node of astRoot) {
+    const res = await executeNode(node);
     if (res?.requiresStdin) {
       return {
         stdout,

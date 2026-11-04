@@ -339,4 +339,68 @@ public class Main {
     expect(res.stdout).toContain('Printf: Alice scored 95 (rate: 99.46)\n');
     expect(res.stdout).toContain('LoopSum: 15\n');
   });
+
+  it('correctly executes if-else branches, while loops, for-each loops, Random, Character, and type casts', async () => {
+    const controlFlowCode = `
+package demo;
+
+import java.util.Random;
+
+public class Main {
+    public static void main(String[] args) {
+        int score = 40;
+        if (score >= 60) {
+            System.out.println("Pass");
+        } else if (score >= 50) {
+            System.out.println("Retake");
+        } else {
+            System.out.println("Fail");
+        }
+
+        int count = 0;
+        while (count < 3) {
+            System.out.println("While: " + count);
+            count++;
+        }
+
+        String[] fruits = {"apple", "banana", "cherry"};
+        for (String f : fruits) {
+            System.out.println("Fruit: " + f);
+        }
+
+        Random rand = new Random();
+        int r = rand.nextInt(10);
+        System.out.println("RandomBound: " + (r >= 0 && r < 10));
+
+        char c = 'A';
+        System.out.println("IsLetter: " + Character.isLetter(c));
+        System.out.println("CharCast: " + (char) 65);
+        System.out.println("IntCast: " + (int) 9.99);
+    }
+}
+`;
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-control-flow-test',
+      name: 'Java Control Flow Test',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: controlFlowCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await compileAndRunJava(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Fail\n');
+    expect(res.stdout).not.toContain('Pass\n');
+    expect(res.stdout).not.toContain('Retake\n');
+    expect(res.stdout).toContain('While: 0\nWhile: 1\nWhile: 2\n');
+    expect(res.stdout).toContain('Fruit: apple\nFruit: banana\nFruit: cherry\n');
+    expect(res.stdout).toContain('RandomBound: true\n');
+    expect(res.stdout).toContain('IsLetter: true\n');
+    expect(res.stdout).toContain('CharCast: A\n');
+    expect(res.stdout).toContain('IntCast: 9\n');
+  });
 });
