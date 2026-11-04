@@ -98,15 +98,51 @@ export async function executePythonInPyodide(
 
   // Stdin handling
   const lines = options.stdin !== undefined && options.stdin !== '' ? options.stdin.split('\n') : [];
+  
+  // Custom input bridging so input(...) prompts the user with the actual prompt text
+  // without triggering Emscripten FS Errno 29 I/O errors or window.prompt blocked errors
+  try {
+    pyodide.registerJsModule('_ide_runner_io', {
+      get_input: async (promptText?: string) => {
+        if (lines.length > 0) {
+          const val = lines.shift() ?? '';
+          if (promptText) {
+            options.onStdout?.(promptText + val + '\n');
+            options.onEvent?.({ type: 'stdout', text: promptText + val + '\n' });
+          }
+          return val;
+        }
+        if (options.requestStdin) {
+          if (promptText) {
+            options.onStdout?.(promptText);
+            options.onEvent?.({ type: 'stdout', text: promptText });
+          }
+          const val = await options.requestStdin(promptText || '');
+          return val !== null ? val : '';
+        }
+        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+          try {
+            const res = window.prompt(promptText || 'Enter input:');
+            const val = res !== null ? res : '';
+            if (promptText) {
+              options.onStdout?.(promptText + val + '\n');
+              options.onEvent?.({ type: 'stdout', text: promptText + val + '\n' });
+            }
+            return val;
+          } catch {
+            // window.prompt blocked by iframe/browser security policies
+          }
+        }
+        return '';
+      },
+    });
+  } catch {}
+
   pyodide.setStdin({
     isatty: true,
     stdin: () => {
       if (lines.length > 0) {
         return lines.shift() ?? '';
-      }
-      if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-        const res = window.prompt('Enter standard input:');
-        return res !== null ? res : '';
       }
       return '';
     },
@@ -129,24 +165,81 @@ export async function executePythonInPyodide(
     }
   }
 
-  // Ensure entrypoint directory is in sys.path and is the current working directory
+  // Ensure entrypoint directory is in sys.path and is the current working directory,
+  // and bind custom input handler if available
   const entryPath = project.entrypoint.startsWith('/') ? project.entrypoint : '/' + project.entrypoint;
   const entryDir = entryPath.substring(0, entryPath.lastIndexOf('/')) || '/';
   await pyodide.runPythonAsync(`
-import sys, os
+import sys, os, builtins, ast
 if '${entryDir}' not in sys.path:
     sys.path.insert(0, '${entryDir}')
 try:
     os.chdir('${entryDir}')
 except Exception:
     pass
+
+try:
+    import _ide_runner_io
+    builtins.input = _ide_runner_io.get_input
+except Exception:
+    pass
+
+def _transform_async_inputs(source_code):
+    try:
+        tree = ast.parse(source_code)
+        async_funcs = set()
+        changed = True
+        while changed:
+            size_before = len(async_funcs)
+            for n in ast.walk(tree):
+                if isinstance(n, ast.FunctionDef):
+                    if any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and (c.func.id == 'input' or c.func.id in async_funcs) for c in ast.walk(n)):
+                        async_funcs.add(n.name)
+            changed = len(async_funcs) > size_before
+
+        if not async_funcs and not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'input' for n in ast.walk(tree)):
+            return source_code
+
+        class _InputTransformer(ast.NodeTransformer):
+            def visit_Call(self, node):
+                self.generic_visit(node)
+                if isinstance(node.func, ast.Name):
+                    if node.func.id == 'input' or node.func.id in async_funcs:
+                        return ast.Await(value=node)
+                return node
+
+            def visit_FunctionDef(self, node):
+                is_async = node.name in async_funcs or any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and (c.func.id == 'input' or c.func.id in async_funcs)
+                    for c in ast.walk(node)
+                )
+                self.generic_visit(node)
+                if is_async:
+                    return ast.AsyncFunctionDef(
+                        name=node.name,
+                        args=node.args,
+                        body=node.body,
+                        decorator_list=node.decorator_list,
+                        returns=node.returns,
+                        type_comment=getattr(node, 'type_comment', None),
+                        type_params=getattr(node, 'type_params', [])
+                    )
+                return node
+
+        tree = _InputTransformer().visit(tree)
+        ast.fix_missing_locations(tree)
+        return ast.unparse(tree)
+    except Exception:
+        return source_code
 `);
 
   const entryFile = project.files.find((f) => f.path === project.entrypoint || '/' + f.path === entryPath);
   const codeToRun = entryFile?.content ?? '';
 
   try {
-    await pyodide.runPythonAsync(codeToRun);
+    pyodide.globals.set('_raw_user_code', codeToRun);
+    const transformedCode = await pyodide.runPythonAsync('_transform_async_inputs(_raw_user_code)');
+    await pyodide.runPythonAsync(transformedCode);
     const durationMs = Date.now() - startTime;
     options.onEvent?.({
       type: 'complete',

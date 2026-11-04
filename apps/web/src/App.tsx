@@ -151,12 +151,22 @@ export const App: React.FC = () => {
     if (project.language === 'python') {
       executePythonInPyodide(project, {
         indexURL: typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'pyodide/') : undefined,
-        stdin: suppliedInputs.join('\n'),
+        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
         onStdout: (text) => {
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
         },
         onStderr: (text) => {
           setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+        requestStdin: async (prompt) => {
+          return new Promise<string>((resolve) => {
+            const reqId = `py-stdin-${Date.now()}`;
+            (window as any).__pyodide_stdin_resolver = resolve;
+            setPendingStdin({
+              requestId: reqId,
+              prompt: prompt || 'Enter input: ',
+            });
+          });
         },
       }).then(
         (res) => {
@@ -291,6 +301,15 @@ export const App: React.FC = () => {
   const handleSupplyStdin = (requestId: string, input: string) => {
     const nextInputs = [...suppliedInputs, input];
     setSuppliedInputs(nextInputs);
+
+    if (project.language === 'python' && (window as any).__pyodide_stdin_resolver) {
+      const resolver = (window as any).__pyodide_stdin_resolver;
+      (window as any).__pyodide_stdin_resolver = null;
+      setPendingStdin(null);
+      setLogs((prev) => [...prev, { type: 'stdout', text: input + '\n' }]);
+      resolver(input);
+      return;
+    }
 
     if (project.language === 'java') {
       let runOutput = '';
