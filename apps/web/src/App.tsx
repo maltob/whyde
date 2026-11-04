@@ -193,7 +193,18 @@ export const App: React.FC = () => {
       compileAndRunCpp({
         files: filesMap,
         standard: 'c++17',
-        stdin: suppliedInputs.join('\n'),
+        stdin: suppliedInputs.length > 0 ? suppliedInputs.join('\n') : undefined,
+        requestStdin: () => {
+          if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+            try {
+              const res = window.prompt('Enter your input:');
+              return res !== null ? res : '';
+            } catch {
+              return '';
+            }
+          }
+          return '';
+        },
         onInfo: (text) => {
           setLogs((prev) => [...prev, { type: 'info', text }]);
         },

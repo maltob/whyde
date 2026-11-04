@@ -23,15 +23,30 @@ class StreamFd extends Fd {
 class StdinFd extends Fd {
   private buffer: Uint8Array = new Uint8Array(0);
   private offset: number = 0;
+  private readCalled: boolean = false;
+  private requestStdin?: () => string;
 
-  constructor(inputString: string = '') {
+  constructor(inputString?: string, requestStdin?: () => string) {
     super();
-    if (inputString) {
+    this.requestStdin = requestStdin;
+    if (inputString !== undefined && inputString !== '') {
       this.buffer = new TextEncoder().encode(inputString.endsWith('\n') ? inputString : inputString + '\n');
     }
   }
 
   override fd_read(size: number): { ret: number; data: Uint8Array } {
+    if (this.offset >= this.buffer.length) {
+      if (!this.readCalled && this.requestStdin) {
+        this.readCalled = true;
+        const val = this.requestStdin();
+        if (val) {
+          const formatted = val.endsWith('\n') ? val : val + '\n';
+          this.buffer = new TextEncoder().encode(formatted);
+          this.offset = 0;
+        }
+      }
+    }
+
     if (this.offset >= this.buffer.length) {
       return { ret: 0, data: new Uint8Array(0) };
     }
@@ -47,6 +62,7 @@ export interface CompileAndRunOptions {
   files: Record<string, string>;
   standard?: string;
   stdin?: string;
+  requestStdin?: () => string;
   onStdout: (text: string) => void;
   onStderr: (text: string) => void;
   onInfo?: (text: string) => void;
@@ -80,7 +96,7 @@ function buildYoWASPFileSystem(files: Record<string, string>): Record<string, an
 }
 
 export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{ exitCode: number }> {
-  const { files, standard = 'c++17', stdin = '', onStdout, onStderr, onInfo } = options;
+  const { files, standard = 'c++17', stdin, requestStdin, onStdout, onStderr, onInfo } = options;
 
   onInfo?.(`Compiling ${Object.keys(files).length} translation unit(s) with Clang (${standard})...\n`);
 
@@ -142,7 +158,7 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{
   onInfo?.(`Compilation successful (${wasmBinary.length} bytes). Executing WASI binary...\n`);
 
   // Set up WASI host environment
-  const stdinFd = new StdinFd(stdin);
+  const stdinFd = new StdinFd(stdin, requestStdin);
   const stdoutFd = new StreamFd({ onWrite: onStdout });
   const stderrFd = new StreamFd({ onWrite: onStderr });
 
