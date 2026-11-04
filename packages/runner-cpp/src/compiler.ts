@@ -52,21 +52,61 @@ export interface CompileAndRunOptions {
   onInfo?: (text: string) => void;
 }
 
+/**
+ * Converts a flat path-to-content map (e.g. {'src/main.cpp': '...'})
+ * into a nested directory tree required by YoWASP virtual filesystem.
+ */
+function buildYoWASPFileSystem(files: Record<string, string>): Record<string, any> {
+  const root: Record<string, any> = {};
+
+  for (const [rawPath, content] of Object.entries(files)) {
+    const cleanPath = rawPath.replace(/^[/\\]+/, '');
+    const parts = cleanPath.split(/[/\\]+/);
+    let current = root;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dir = parts[i];
+      if (!current[dir] || typeof current[dir] !== 'object') {
+        current[dir] = {};
+      }
+      current = current[dir];
+    }
+
+    const fileName = parts[parts.length - 1];
+    current[fileName] = content;
+  }
+
+  return root;
+}
+
 export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<{ exitCode: number }> {
   const { files, standard = 'c++17', stdin = '', onStdout, onStderr, onInfo } = options;
 
   onInfo?.(`Compiling ${Object.keys(files).length} translation unit(s) with Clang (${standard})...\n`);
 
-  // Collect compilation source files
+  // Build nested directory structure for YoWASP VFS
+  const yoWASPFiles = buildYoWASPFileSystem(files);
+
+  // Collect compilation source files and include directories
   const cppFiles = Object.keys(files).filter((f) => f.endsWith('.cpp') || f.endsWith('.cc') || f.endsWith('.c'));
-  const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...cppFiles, '-o', 'out.wasm'];
+  const includeDirs = new Set<string>();
+  for (const f of Object.keys(files)) {
+    const clean = f.replace(/^[/\\]+/, '');
+    const lastSlash = clean.lastIndexOf('/');
+    if (lastSlash > 0) {
+      includeDirs.add(clean.substring(0, lastSlash));
+    }
+  }
+  const includeFlags = Array.from(includeDirs).map((d) => `-I${d}`);
+
+  const clangArgs = [`-std=${standard}`, '-fno-exceptions', '-O2', ...includeFlags, ...cppFiles, '-o', 'out.wasm'];
 
   let compileStderr = '';
   let compileStdout = '';
 
   let compileResultFiles: any;
   try {
-    compileResultFiles = await commands['clang++'](clangArgs, files, {
+    compileResultFiles = await commands['clang++'](clangArgs, yoWASPFiles, {
       stdout: (chunk: Uint8Array | null) => {
         if (!chunk) return;
         compileStdout += new TextDecoder().decode(chunk);
