@@ -21,4 +21,15 @@ describe('parseHashString', () => {
     expect(res.blank).toBe(true);
     expect(res.hideNewProject).toBe(true);
   });
+
+  it('parses codeSuggest hash option', () => {
+    const res1 = parseHashString('#codeSuggest=1');
+    expect(res1.codeSuggest).toBe(true);
+
+    const res0 = parseHashString('#codeSuggest=0');
+    expect(res0.codeSuggest).toBe(false);
+
+    const resAlias = parseHashString('#suggest=false');
+    expect(resAlias.codeSuggest).toBe(false);
+  });
 });

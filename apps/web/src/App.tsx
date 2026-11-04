@@ -34,6 +34,9 @@ export const App: React.FC = () => {
   const [syntaxColoring, setSyntaxColoring] = useState<boolean>(() => {
     return initialHash.highlight !== undefined ? initialHash.highlight : true;
   });
+  const [codeSuggest, setCodeSuggest] = useState<boolean>(() => {
+    return initialHash.codeSuggest !== undefined ? initialHash.codeSuggest : true;
+  });
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [executionPhase, setExecutionPhase] = useState<'idle' | 'compiling' | 'running'>('idle');
@@ -43,6 +46,7 @@ export const App: React.FC = () => {
   const isDraggingSplitterRef = useRef<boolean>(false);
 
   const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info'; text: string }[]>([]);
+  const [plots, setPlots] = useState<string[]>([]);
   const [pendingStdin, setPendingStdin] = useState<{ requestId: string; prompt?: string } | null>(null);
   const [suppliedInputs, setSuppliedInputs] = useState<string[]>([]);
   const lastOutputLengthRef = useRef<number>(0);
@@ -279,6 +283,9 @@ export const App: React.FC = () => {
         },
         onStderr: (text) => {
           setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+        onPlot: (dataUrl) => {
+          setPlots((prev) => [...prev, dataUrl]);
         },
         requestStdin: async (prompt) => {
           return new Promise<string>((resolve) => {
@@ -735,6 +742,17 @@ export const App: React.FC = () => {
                       content={activeFile.content}
                       syntaxColoring={syntaxColoring}
                       onToggleSyntaxColoring={handleToggleSyntaxColoring}
+                      codeSuggest={codeSuggest}
+                      onToggleCodeSuggest={(enabled) => {
+                        setCodeSuggest(enabled);
+                        setUrlHash({
+                          lang: project.language as any,
+                          highlight: syntaxColoring,
+                          codeSuggest: enabled,
+                          file: activeFilePath,
+                        });
+                      }}
+                      allFilePaths={project.files.map((f) => f.path)}
                       onChange={handleContentChange}
                     />
                   </div>
@@ -771,9 +789,13 @@ export const App: React.FC = () => {
                 >
                   <XtermTerminal
                     logs={logs}
+                    plots={plots}
                     pendingStdin={pendingStdin}
                     onSupplyStdin={handleSupplyStdin}
-                    onClear={() => setLogs([])}
+                    onClear={() => {
+                      setLogs([]);
+                      setPlots([]);
+                    }}
                     height="100%"
                     isMaximized={isTerminalActive}
                     onToggleMaximize={() => {

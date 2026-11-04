@@ -7,6 +7,7 @@ export interface UrlHashOptions {
   highlight?: boolean;
   file?: string;
   hideNewProject?: boolean;
+  codeSuggest?: boolean;
 }
 
 export function parseHashString(hash: string): UrlHashOptions {
@@ -40,6 +41,11 @@ export function parseHashString(hash: string): UrlHashOptions {
     result.highlight = highlight !== 'off' && highlight !== 'false' && highlight !== '0';
   }
 
+  const codeSuggest = params.get('codeSuggest') || params.get('suggest');
+  if (codeSuggest !== null) {
+    result.codeSuggest = codeSuggest !== '0' && codeSuggest !== 'false' && codeSuggest !== 'off';
+  }
+
   const file = params.get('file');
   if (file) {
     result.file = file;
@@ -66,6 +72,7 @@ export function setUrlHash(options: UrlHashOptions): void {
   if (options.blank) params.set('blank', 'true');
   if (options.hideNewProject) params.set('hideNewProject', 'true');
   if (options.highlight !== undefined) params.set('highlight', options.highlight ? 'on' : 'off');
+  if (options.codeSuggest !== undefined) params.set('codeSuggest', options.codeSuggest ? '1' : '0');
   if (options.file) params.set('file', options.file);
 
   const hash = params.toString();
