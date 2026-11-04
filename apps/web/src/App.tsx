@@ -654,7 +654,11 @@ export const App: React.FC = () => {
         <FileTree
           files={project.files}
           activeFile={activeFile.path}
-          onSelectFile={handleSelectFile}
+          onSelectFile={(path) => {
+            handleSelectFile(path);
+            setActiveCenterTab('editor');
+            setIsTerminalMaximized(false);
+          }}
           onAddFile={handleAddFile}
           onDeleteFile={handleDeleteFile}
           onRenameFile={handleRenameFile}
@@ -663,110 +667,124 @@ export const App: React.FC = () => {
         />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           {/* Main Workspace Top Tabs (Editor / Terminal) */}
-          <div
-            style={{
-              display: 'flex',
-              backgroundColor: '#090d16',
-              borderBottom: '1px solid #1e293b',
-              paddingLeft: '6px',
-            }}
-          >
-            <button
-              onClick={() => setActiveCenterTab('editor')}
-              style={{
-                padding: '6px 14px',
-                backgroundColor: activeCenterTab === 'editor' ? '#1e293b' : 'transparent',
-                color: activeCenterTab === 'editor' ? '#38bdf8' : '#94a3b8',
-                border: 'none',
-                borderBottom: activeCenterTab === 'editor' ? '2px solid #38bdf8' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span>{activeFile.path.split('/').pop()}</span>
-            </button>
-            <button
-              onClick={() => setActiveCenterTab('terminal')}
-              style={{
-                padding: '6px 14px',
-                backgroundColor: activeCenterTab === 'terminal' ? '#1e293b' : 'transparent',
-                color: activeCenterTab === 'terminal' ? '#38bdf8' : '#94a3b8',
-                border: 'none',
-                borderBottom: activeCenterTab === 'terminal' ? '2px solid #38bdf8' : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span>Terminal Tab</span>
-            </button>
-          </div>
+          {(() => {
+            const isTerminalActive = activeCenterTab === 'terminal' || isTerminalMaximized;
+            return (
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    backgroundColor: '#090d16',
+                    borderBottom: '1px solid #1e293b',
+                    paddingLeft: '6px',
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setActiveCenterTab('editor');
+                      setIsTerminalMaximized(false);
+                    }}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: !isTerminalActive ? '#1e293b' : 'transparent',
+                      color: !isTerminalActive ? '#38bdf8' : '#94a3b8',
+                      border: 'none',
+                      borderBottom: !isTerminalActive ? '2px solid #38bdf8' : '2px solid transparent',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{activeFile.path.split('/').pop()}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveCenterTab('terminal');
+                      setIsTerminalMaximized(true);
+                    }}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: isTerminalActive ? '#1e293b' : 'transparent',
+                      color: isTerminalActive ? '#38bdf8' : '#94a3b8',
+                      border: 'none',
+                      borderBottom: isTerminalActive ? '2px solid #38bdf8' : '2px solid transparent',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>Terminal Tab</span>
+                  </button>
+                </div>
 
-          {activeCenterTab === 'editor' && !isTerminalMaximized && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <Editor
-                filePath={activeFile.path}
-                content={activeFile.content}
-                syntaxColoring={syntaxColoring}
-                onToggleSyntaxColoring={handleToggleSyntaxColoring}
-                onChange={handleContentChange}
-              />
-            </div>
-          )}
+                {!isTerminalActive && (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <Editor
+                      filePath={activeFile.path}
+                      content={activeFile.content}
+                      syntaxColoring={syntaxColoring}
+                      onToggleSyntaxColoring={handleToggleSyntaxColoring}
+                      onChange={handleContentChange}
+                    />
+                  </div>
+                )}
 
-          {/* Draggable Splitter between Editor and Terminal */}
-          {activeCenterTab === 'editor' && !isTerminalMaximized && (
-            <div
-              role="separator"
-              aria-orientation="horizontal"
-              title="Drag up or down to resize terminal"
-              onMouseDown={handleSplitterMouseDown}
-              style={{
-                height: '4px',
-                backgroundColor: '#1e293b',
-                cursor: 'row-resize',
-                transition: 'background-color 0.15s ease',
-                userSelect: 'none',
-                zIndex: 10,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#38bdf8')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
-            />
-          )}
+                {/* Draggable Splitter between Editor and Terminal */}
+                {!isTerminalActive && (
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    title="Drag up or down to resize terminal"
+                    onMouseDown={handleSplitterMouseDown}
+                    style={{
+                      height: '4px',
+                      backgroundColor: '#1e293b',
+                      cursor: 'row-resize',
+                      transition: 'background-color 0.15s ease',
+                      userSelect: 'none',
+                      zIndex: 10,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#38bdf8')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
+                  />
+                )}
 
-          <div
-            style={{
-              height: activeCenterTab === 'terminal' || isTerminalMaximized ? '100%' : `${terminalHeight}px`,
-              display: activeCenterTab === 'editor' && !isTerminalMaximized && terminalHeight === 0 ? 'none' : 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              flex: activeCenterTab === 'terminal' || isTerminalMaximized ? 1 : undefined,
-            }}
-          >
-            <XtermTerminal
-              logs={logs}
-              pendingStdin={pendingStdin}
-              onSupplyStdin={handleSupplyStdin}
-              onClear={() => setLogs([])}
-              height="100%"
-              isMaximized={isTerminalMaximized || activeCenterTab === 'terminal'}
-              onToggleMaximize={() => {
-                if (activeCenterTab === 'terminal') {
-                  setActiveCenterTab('editor');
-                  setIsTerminalMaximized(false);
-                } else {
-                  setIsTerminalMaximized((prev) => !prev);
-                }
-              }}
-            />
-          </div>
+                <div
+                  style={{
+                    height: isTerminalActive ? '100%' : `${terminalHeight}px`,
+                    display: !isTerminalActive && terminalHeight === 0 ? 'none' : 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    flex: isTerminalActive ? 1 : undefined,
+                  }}
+                >
+                  <XtermTerminal
+                    logs={logs}
+                    pendingStdin={pendingStdin}
+                    onSupplyStdin={handleSupplyStdin}
+                    onClear={() => setLogs([])}
+                    height="100%"
+                    isMaximized={isTerminalActive}
+                    onToggleMaximize={() => {
+                      if (isTerminalActive) {
+                        setActiveCenterTab('editor');
+                        setIsTerminalMaximized(false);
+                      } else {
+                        setActiveCenterTab('terminal');
+                        setIsTerminalMaximized(true);
+                      }
+                    }}
+                  />
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
