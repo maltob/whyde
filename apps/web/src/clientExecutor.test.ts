@@ -80,6 +80,30 @@ for i in range(1, 4):
       const res = executeClientSideCode('python', code);
       expect(res.stdout).toBe('Num: 1\nNum: 2\nNum: 3\n');
     });
+
+    it('correctly reads files with "with open(...) as file:" and calls line.strip()', () => {
+      const code = `# Python 3.14 Starter
+import sys
+
+def main():
+    file_path = "../cats.txt"
+    # Read and print each line
+    with open(file_path, "r") as file:
+        for line in file:
+            print(line.strip()) # strip() removes the trailing newline
+
+if __name__ == "__main__":
+    main()
+`;
+      const allFiles = [
+        { path: 'src/main.py', content: code },
+        { path: 'cats.txt', content: 'Siamese\nPersian\nMaine Coon\nBengal' },
+      ];
+
+      const res = executeClientSideCode('python', code, undefined, allFiles);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toBe('Siamese\nPersian\nMaine Coon\nBengal\n');
+    });
   });
 
   describe('C++ and Java execution', () => {

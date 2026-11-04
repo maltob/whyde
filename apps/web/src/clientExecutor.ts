@@ -322,8 +322,10 @@ function runPython(
   const hasMainFunc = Object.prototype.hasOwnProperty.call(functions, 'main');
   const hasMainGuard = code.includes('__main__');
 
+  const currentFile = allFiles.find((f) => f.content === code)?.path || "src/main.py";
+
   if (hasMainFunc && hasMainGuard) {
-    executePyLines(functions['main'].bodyLines, scope, functions, state);
+    executePyLines(functions['main'].bodyLines, scope, functions, state, allFiles, currentFile);
   } else {
     // Filter out def blocks from top-level execution
     const topLevelLines: string[] = [];
@@ -351,7 +353,7 @@ function runPython(
       topLevelLines.push(raw);
       i++;
     }
-    executePyLines(topLevelLines, scope, functions, state);
+    executePyLines(topLevelLines, scope, functions, state, allFiles, currentFile);
   }
 
   if (state.waitingForStdin) {
@@ -444,6 +446,52 @@ function splitPyArgs(argsStr: string): string[] {
   return args;
 }
 
+
+function resolveRelativePath(baseFile: string, relPath: string): string {
+  const parts = baseFile.split('/');
+  parts.pop();
+  for (const seg of relPath.split('/')) {
+    if (seg === '.' || seg === '') continue;
+    if (seg === '..') {
+      if (parts.length > 0) parts.pop();
+    } else {
+      parts.push(seg);
+    }
+  }
+  return parts.join('/');
+}
+
+function splitMethodCall(expr: string): { target: string; method: string; args: string } | null {
+  let depth = 0;
+  let inQuote: string | null = null;
+  let lastDot = -1;
+  let lastParen = -1;
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if ((ch === '"' || ch === "'") && (i === 0 || expr[i - 1] !== '\\')) {
+      if (!inQuote) inQuote = ch;
+      else if (inQuote === ch) inQuote = null;
+    } else if (!inQuote) {
+      if (ch === '(') {
+        if (depth === 0) lastParen = i;
+        depth++;
+      } else if (ch === ')') {
+        depth--;
+      } else if (ch === '.' && depth === 0) {
+        lastDot = i;
+      }
+    }
+  }
+  if (lastDot > 0 && lastParen > lastDot && expr.endsWith(')')) {
+    return {
+      target: expr.slice(0, lastDot).trim(),
+      method: expr.slice(lastDot + 1, lastParen).trim(),
+      args: expr.slice(lastParen + 1, -1).trim(),
+    };
+  }
+  return null;
+}
+
 function evalPyExpr(expr: string, scope: Record<string, any>, functions: Record<string, PythonFunction>): any {
   expr = expr.trim();
   if (!expr) return undefined;
@@ -518,6 +566,28 @@ function evalPyExpr(expr: string, scope: Record<string, any>, functions: Record<
   if (sumMatch) {
     const target = evalPyExpr(sumMatch[1], scope, functions);
     return Array.isArray(target) ? target.reduce((a, b) => a + b, 0) : 0;
+  }
+
+
+  // method calls on variables or literals: .strip(), .lower(), .upper(), .split()
+  const methodCall = splitMethodCall(expr);
+  if (methodCall) {
+    const targetVal = evalPyExpr(methodCall.target, scope, functions);
+    if (targetVal !== undefined && targetVal !== null) {
+      if (methodCall.method === 'strip') {
+        return String(targetVal).replace(/^[\s\r\n]+|[\s\r\n]+$/g, '');
+      }
+      if (methodCall.method === 'lower') {
+        return String(targetVal).toLowerCase();
+      }
+      if (methodCall.method === 'upper') {
+        return String(targetVal).toUpperCase();
+      }
+      if (methodCall.method === 'split') {
+        const arg = methodCall.args ? evalPyExpr(methodCall.args, scope, functions) : undefined;
+        return typeof arg === 'string' ? String(targetVal).split(arg) : String(targetVal).trim().split(/\s+/);
+      }
+    }
   }
 
   // user defined function call
@@ -597,7 +667,9 @@ function executePyLines(
   lines: string[],
   scope: Record<string, any>,
   functions: Record<string, PythonFunction>,
-  state: PythonInterpreterState
+  state: PythonInterpreterState,
+  allFiles: { path: string; content: string }[] = [],
+  currentFile: string = ""
 ): { returnValue?: any; paused?: boolean } {
   let i = 0;
   while (i < lines.length) {
@@ -633,6 +705,59 @@ function executePyLines(
       return { returnValue: expr ? evalPyExpr(expr, scope, functions) : undefined };
     }
 
+
+    // with open(...) as var:
+    const withMatch = line.match(/^with\s+open\(([^,)]+)(?:,\s*["']([rwaxbt+]+)["'])?\)\s+as\s+([A-Za-z0-9_]+):$/);
+    if (withMatch) {
+      const pathArg = withMatch[1].trim();
+      const asVar = withMatch[3].trim();
+      const rawPath = evalPyExpr(pathArg, scope, functions);
+      const pathStr = typeof rawPath === 'string' ? rawPath : pathArg;
+      const resolved = resolveRelativePath(currentFile, pathStr);
+
+      const targetFile = allFiles.find(
+        (f) =>
+          f.path === resolved ||
+          f.path === pathStr ||
+          f.path.replace(/^\/+/, '') === resolved ||
+          f.path.replace(/^\/+/, '') === pathStr.replace(/^\/+/, '') ||
+          f.path.endsWith('/' + pathStr) ||
+          f.path.endsWith(pathStr)
+      );
+
+      const baseIndent = getPyIndent(rawLine);
+      const bodyLines: string[] = [];
+      let j = i + 1;
+      while (j < lines.length) {
+        if (!lines[j].trim() || lines[j].trim().startsWith('#')) {
+          bodyLines.push(lines[j]);
+          j++;
+          continue;
+        }
+        if (getPyIndent(lines[j]) > baseIndent) {
+          bodyLines.push(lines[j]);
+          j++;
+        } else {
+          break;
+        }
+      }
+      i = j;
+
+      if (!targetFile) {
+        state.stdout += `FileNotFoundError: [Errno 2] No such file or directory: '${pathStr}'\n`;
+        return {};
+      }
+
+      // Populate file iterator: array of lines with newlines
+      const fileLines = targetFile.content.split('\n').map((l, idx, arr) => (idx === arr.length - 1 ? l : l + '\n'));
+      scope[asVar] = fileLines;
+
+      const res = executePyLines(bodyLines, scope, functions, state, allFiles, currentFile);
+      if (res.paused) return res;
+      if (res.returnValue !== undefined) return res;
+      continue;
+    }
+
     // while <cond>:
     if (line.startsWith('while ') && line.endsWith(':')) {
       const cond = line.slice(6, -1).trim();
@@ -656,7 +781,7 @@ function executePyLines(
 
       let loopLimit = 10000;
       while (evalPyExpr(cond, scope, functions) && loopLimit-- > 0) {
-        const res = executePyLines(bodyLines, scope, functions, state);
+        const res = executePyLines(bodyLines, scope, functions, state, allFiles, currentFile);
         if (res.paused) return res;
         if (res.returnValue !== undefined) return res;
       }
@@ -689,7 +814,7 @@ function executePyLines(
       const items = evalPyExpr(iterExpr, scope, functions) || [];
       for (const item of items) {
         scope[varName] = item;
-        const res = executePyLines(bodyLines, scope, functions, state);
+        const res = executePyLines(bodyLines, scope, functions, state, allFiles, currentFile);
         if (res.paused) return res;
         if (res.returnValue !== undefined) return res;
       }
@@ -719,7 +844,7 @@ function executePyLines(
       i = j;
 
       if (evalPyExpr(cond, scope, functions)) {
-        const res = executePyLines(bodyLines, scope, functions, state);
+        const res = executePyLines(bodyLines, scope, functions, state, allFiles, currentFile);
         if (res.paused) return res;
         if (res.returnValue !== undefined) return res;
       }

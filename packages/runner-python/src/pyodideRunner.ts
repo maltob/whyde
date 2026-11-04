@@ -38,6 +38,7 @@ export async function getPyodideInstance(options?: { indexURL?: string; packageC
 
 export interface PythonExecutionOptions {
   stdin?: string;
+  packages?: string[];
   onStdout?: (text: string) => void;
   onStderr?: (text: string) => void;
   onEvent?: (event: RuntimeEvent) => void;
@@ -54,6 +55,23 @@ export async function executePythonInPyodide(
 
   const startTime = Date.now();
   const pyodide = await getPyodideInstance({ indexURL: options.indexURL });
+
+  // Auto-detect or include requested packages (numpy, pandas, regex, pytest, etc.)
+  const packagesToLoad = new Set<string>(options.packages || []);
+  const allCode = project.files.map((f) => f.content).join('\n');
+
+  if (/\b(import\s+numpy|from\s+numpy)\b/.test(allCode)) packagesToLoad.add('numpy');
+  if (/\b(import\s+pandas|from\s+pandas)\b/.test(allCode)) packagesToLoad.add('pandas');
+  if (/\b(import\s+regex|from\s+regex)\b/.test(allCode)) packagesToLoad.add('regex');
+  if (/\b(import\s+pytest|from\s+pytest)\b/.test(allCode)) packagesToLoad.add('pytest');
+
+  if (packagesToLoad.size > 0 && typeof pyodide.loadPackage === 'function') {
+    try {
+      await pyodide.loadPackage(Array.from(packagesToLoad));
+    } catch (e) {
+      console.warn('Could not load requested packages:', Array.from(packagesToLoad), e);
+    }
+  }
 
   // Redirect stdout and stderr
   pyodide.setStdout({

@@ -19,6 +19,9 @@ importers:
       '@ide/project-model':
         specifier: workspace:*
         version: link:../../packages/project-model
+      '@ide/runner-cpp':
+        specifier: workspace:*
+        version: link:../../packages/runner-cpp
       '@ide/runner-java':
         specifier: workspace:*
         version: link:../../packages/runner-java

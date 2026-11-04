@@ -8,6 +8,8 @@ import { Editor } from './Editor.js';
 import { XtermTerminal } from './XtermTerminal.js';
 import { STARTER_PROJECTS, BLANK_PROJECTS } from './templates.js';
 import { executeClientSideCode } from './clientExecutor.js';
+import { executePythonInPyodide } from '@ide/runner-python';
+import { compileAndRunCpp } from '@ide/runner-cpp';
 import { parseUrlHash, setUrlHash } from './hashParams.js';
 
 const repo = new IndexedDbProjectRepository();
@@ -144,6 +146,67 @@ export const App: React.FC = () => {
       ...prev,
       { type: 'info', text: `[Browser IDE] Compiling and running ${project.language} (${activeFile.path})...\n` },
     ]);
+
+    if (project.language === 'python') {
+      executePythonInPyodide(project, {
+        indexURL: typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'pyodide/') : undefined,
+        stdin: suppliedInputs.join('\n'),
+        onStdout: (text) => {
+          setLogs((prev) => [...prev, { type: 'stdout', text }]);
+        },
+        onStderr: (text) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+      }).then(
+        (res) => {
+          setLogs((prev) => [
+            ...prev,
+            { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+          ]);
+          setIsRunning(false);
+        },
+        (err) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setIsRunning(false);
+        }
+      );
+      return;
+    }
+
+    if (project.language === 'cpp') {
+      const filesMap: Record<string, string> = {};
+      for (const f of project.files) {
+        filesMap[f.path] = f.content;
+      }
+
+      compileAndRunCpp({
+        files: filesMap,
+        standard: 'c++17',
+        stdin: suppliedInputs.join('\n'),
+        onInfo: (text) => {
+          setLogs((prev) => [...prev, { type: 'info', text }]);
+        },
+        onStdout: (text) => {
+          setLogs((prev) => [...prev, { type: 'stdout', text }]);
+        },
+        onStderr: (text) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text }]);
+        },
+      }).then(
+        (res) => {
+          setLogs((prev) => [
+            ...prev,
+            { type: 'info', text: `[Browser IDE] Program completed with exit code ${res.exitCode}.\n` },
+          ]);
+          setIsRunning(false);
+        },
+        (err) => {
+          setLogs((prev) => [...prev, { type: 'stderr', text: `[Browser IDE Error] ${err?.message || err}\n` }]);
+          setIsRunning(false);
+        }
+      );
+      return;
+    }
 
     setTimeout(() => {
       const result = executeClientSideCode(
