@@ -20,6 +20,17 @@ class StreamFd extends Fd {
   }
 }
 
+// Safe event loop yielder to ensure browser frame rendering during multi-step compilation
+const yieldFrame = async () => {
+  if (typeof requestAnimationFrame !== 'undefined') {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    });
+  } else {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+};
+
 export class StdinRequiredError extends Error {
   requestId: string;
   prompt: string;
@@ -198,6 +209,9 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<C
         if (objectFileCache.has(fileKey)) {
           objFiles[objFileName] = objectFileCache.get(fileKey)!;
         } else {
+          // Yield to let the browser breathe and animate the UI between translation units
+          await yieldFrame();
+
           // Compile single compilation unit to .o
           let singleStderr = '';
           try {
@@ -229,6 +243,7 @@ export async function compileAndRunCpp(options: CompileAndRunOptions): Promise<C
       }
 
       // Link cached object files
+      await yieldFrame();
       try {
         compileResultFiles = await commands['clang++'](
           [`-std=${standard}`, ...objPathsToLink, '-o', 'out.wasm'],

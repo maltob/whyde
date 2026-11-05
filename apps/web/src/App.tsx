@@ -12,6 +12,7 @@ import { executePythonInPyodide } from '@ide/runner-python';
 import { compileAndRunCpp } from '@ide/runner-cpp';
 import { compileAndRunJava } from '@ide/runner-java';
 import { parseUrlHash, setUrlHash } from './hashParams.js';
+import { yieldToMainThread } from './yieldHelper.js';
 
 const repo = new IndexedDbProjectRepository();
 
@@ -272,7 +273,7 @@ export const App: React.FC = () => {
 
     // Yield to the browser event loop so React flushes DOM updates and paints the animated "Compiling..." button
     // before CPU-bound WebAssembly execution starts on the main thread.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await yieldToMainThread();
 
     if (project.language === 'python') {
       executePythonInPyodide(project, {
@@ -755,6 +756,7 @@ export const App: React.FC = () => {
                       }}
                       showSuggestButton={initialHash.codeSuggest !== false}
                       allFilePaths={project.files.map((f) => f.path)}
+                      allFiles={project.files.map((f) => ({ path: f.path, content: f.content }))}
                       onChange={handleContentChange}
                     />
                   </div>

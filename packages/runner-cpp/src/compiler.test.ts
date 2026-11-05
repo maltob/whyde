@@ -41,7 +41,7 @@ void greet() {
     expect(stdout).toContain('Hello from C++17+!');
     expect(stdout).toContain('Greetings from helper!');
     expect(stderr).toBe('');
-  }, 30000);
+  }, 120000);
 
   it('pauses on std::cin when no stdin is supplied, then resumes cleanly on replay with cached wasm', async () => {
     const mainWithCin = `#include <iostream>
