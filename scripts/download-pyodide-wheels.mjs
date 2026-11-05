@@ -31,7 +31,7 @@ function getDeps(targets) {
   return visited;
 }
 
-const targetPackages = ['matplotlib', 'scikit-learn', 'pillow', 'requests', 'numpy', 'scipy'];
+const targetPackages = ['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'pillow', 'requests', 'regex', 'pyodide-http'];
 const needed = Array.from(getDeps(targetPackages));
 const filesToDownload = needed.map(pkg => lock.packages[pkg]?.file_name).filter(Boolean);
 
