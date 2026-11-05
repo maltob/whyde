@@ -154,6 +154,23 @@ const MEMBER_COMPLETIONS: Record<string, SuggestionItem[]> = {
     { label: 'DataFrame', insertText: 'DataFrame($0)', kind: 'class', detail: 'DataFrame(data=None)', documentation: 'Two-dimensional tabular data.' },
     { label: 'Series', insertText: 'Series($0)', kind: 'class', detail: 'Series(data=None)', documentation: 'One-dimensional ndarray with labels.' },
     { label: 'read_csv', insertText: 'read_csv("$0")', kind: 'function', detail: 'read_csv(filepath)', documentation: 'Read CSV into DataFrame.' },
+    { label: 'concat', insertText: 'concat([$0])', kind: 'function', detail: 'concat(objs)', documentation: 'Concatenate pandas objects.' },
+  ],
+  df: [
+    { label: 'head', insertText: 'head($0)', kind: 'function', detail: 'df.head(n=5)', documentation: 'Return the first n rows.' },
+    { label: 'tail', insertText: 'tail($0)', kind: 'function', detail: 'df.tail(n=5)', documentation: 'Return the last n rows.' },
+    { label: 'describe', insertText: 'describe()', kind: 'function', detail: 'df.describe()', documentation: 'Generate descriptive statistics.' },
+    { label: 'info', insertText: 'info()', kind: 'function', detail: 'df.info()', documentation: 'Print a concise summary of a DataFrame.' },
+    { label: 'groupby', insertText: 'groupby("$0")', kind: 'function', detail: 'df.groupby(by)', documentation: 'Group DataFrame using a mapper or series.' },
+    { label: 'drop', insertText: 'drop(columns=[$0])', kind: 'function', detail: 'df.drop(labels=None, axis=0)', documentation: 'Drop specified labels from rows or columns.' },
+    { label: 'fillna', insertText: 'fillna($0)', kind: 'function', detail: 'df.fillna(value)', documentation: 'Fill NA/NaN values using specified method.' },
+    { label: 'dropna', insertText: 'dropna()', kind: 'function', detail: 'df.dropna()', documentation: 'Remove missing values.' },
+    { label: 'sort_values', insertText: 'sort_values(by="$0")', kind: 'function', detail: 'df.sort_values(by)', documentation: 'Sort by the values along either axis.' },
+    { label: 'columns', insertText: 'columns', kind: 'variable', detail: 'df.columns', documentation: 'The column labels of the DataFrame.' },
+    { label: 'shape', insertText: 'shape', kind: 'variable', detail: 'df.shape', documentation: 'Return a tuple representing the dimensionality.' },
+    { label: 'loc', insertText: 'loc[$0]', kind: 'variable', detail: 'df.loc[row, col]', documentation: 'Access a group of rows and columns by label(s).' },
+    { label: 'iloc', insertText: 'iloc[$0]', kind: 'variable', detail: 'df.iloc[row, col]', documentation: 'Purely integer-location based indexing.' },
+    { label: 'to_csv', insertText: 'to_csv("$0", index=False)', kind: 'function', detail: 'df.to_csv(path_or_buf)', documentation: 'Write object to a comma-separated values (csv) file.' },
   ],
   requests: [
     { label: 'get', insertText: 'get("$0")', kind: 'function', detail: 'get(url, **kwargs)', documentation: 'Sends a GET request.' },
@@ -184,7 +201,7 @@ export function getSuggestions(
   const textBeforeCursor = currentCode.slice(0, cursorIndex);
 
   // 1. Detect VFS file completion (e.g. #include "...", new File("..."), open("..."))
-  const quoteMatch = textBeforeCursor.match(/(?:#include\s*["<]|new\s+File\s*\(\s*["']|open\s*\(\s*["']|FileReader\s*\(\s*["'])([^"'>]*)$/);
+  const quoteMatch = textBeforeCursor.match(/(?:new\s+File\s*\(\s*["']|open\s*\(\s*["']|FileReader\s*\(\s*["'])([^"'>]*)$/);
   if (quoteMatch) {
     const filePrefix = quoteMatch[1];
     const replaceStart = cursorIndex - filePrefix.length;
@@ -205,6 +222,51 @@ export function getSuggestions(
       item.label.toLowerCase().includes(filePrefix.toLowerCase())
     );
     return { items: filtered, prefix: filePrefix, replaceStart };
+  }
+
+  // 1b. Detect C++ #include completion (local files + standard library headers)
+  const includeMatch = textBeforeCursor.match(/#include\s*([<"][^>"\r\n]*)$/);
+  if (includeMatch) {
+    const rawPrefix = includeMatch[1]; // e.g. `<io` or `"util`
+    const replaceStart = cursorIndex - rawPrefix.length;
+    const isLocalQuote = rawPrefix.startsWith('"');
+    const headerQuery = rawPrefix.slice(1).toLowerCase();
+
+    const stdHeaders = [
+      'iostream', 'vector', 'string', 'algorithm', 'cmath', 'fstream',
+      'sstream', 'map', 'set', 'unordered_map', 'unordered_set', 'memory',
+      'chrono', 'thread', 'queue', 'stack', 'numeric', 'cassert'
+    ];
+
+    const items: SuggestionItem[] = [];
+    if (!isLocalQuote) {
+      for (const h of stdHeaders) {
+        if (h.toLowerCase().includes(headerQuery)) {
+          items.push({
+            label: `<${h}>`,
+            insertText: `<${h}>`,
+            kind: 'module',
+            documentation: `Standard library header <${h}>`,
+          });
+        }
+      }
+    }
+
+    for (const p of allFilePaths) {
+      if (p === filePath) continue;
+      const basename = p.split('/').pop() || p;
+      if (basename.toLowerCase().includes(headerQuery)) {
+        items.push({
+          label: `"${basename}"`,
+          insertText: `"${basename}"`,
+          kind: 'file',
+          detail: p,
+          documentation: `Project virtual header: ${p}`,
+        });
+      }
+    }
+
+    return { items, prefix: rawPrefix, replaceStart };
   }
 
   // 2. Member Access Completion: e.g. `plt.`, `turtle.`, `np.`, `std::`
@@ -242,8 +304,23 @@ export function getSuggestions(
   }
 
   const prefix = wordMatch[1];
-  const replaceStart = cursorIndex - prefix.length;
+  let replaceStart = cursorIndex - prefix.length;
   const ext = filePath.split('.').pop()?.toLowerCase();
+
+  // If the user is typing an import statement on the current line (e.g. `import pan` or `from pan`),
+  // replace from the start of the import statement on this line so we don't end up with `import import pandas as pd`
+  const lastNewlineIndex = textBeforeCursor.lastIndexOf('\n');
+  const lineStart = lastNewlineIndex === -1 ? 0 : lastNewlineIndex + 1;
+  const lineText = textBeforeCursor.slice(lineStart);
+  const importLineMatch = lineText.match(/^([ \t]*)(?:from\s+[A-Za-z0-9_.]+\s+)?import\s+/);
+  const fromLineMatch = lineText.match(/^([ \t]*)from\s+/);
+  if (importLineMatch) {
+    const indent = importLineMatch[1] || '';
+    replaceStart = lineStart + indent.length;
+  } else if (fromLineMatch) {
+    const indent = fromLineMatch[1] || '';
+    replaceStart = lineStart + indent.length;
+  }
 
   // Base suggestions by language
   let baseSuggestions: SuggestionItem[] = [];
@@ -296,14 +373,20 @@ export function getSuggestions(
       }
     }
 
-    // General identifiers
-    const idRegex = /\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g;
+    // Python variable assignments: e.g. df = pd.DataFrame(...), data = { ... }, x = 10
+    const pyAssignRegex = /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)/gm;
+    let assignMatch: RegExpExecArray | null;
+    while ((assignMatch = pyAssignRegex.exec(code)) !== null) {
+      const varName = assignMatch[1];
+      identifiers.add(varName);
+    }
+
+    // General identifiers (supports identifiers of length >= 1)
+    const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
     let match: RegExpExecArray | null;
     while ((match = idRegex.exec(code)) !== null) {
       const id = match[0];
-      if (id !== prefix) {
-        identifiers.add(id);
-      }
+      identifiers.add(id);
     }
   }
 

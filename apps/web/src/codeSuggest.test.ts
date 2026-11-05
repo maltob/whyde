@@ -38,4 +38,37 @@ describe('codeSuggest engine', () => {
     const res = getSuggestions('std::vec', 8, 'src/main.cpp');
     expect(res.items.some((i) => i.label === 'vector')).toBe(true);
   });
+
+  it('suggests local variables such as df when typing single character d', () => {
+    const code = `import pandas as pd\ndf = pd.DataFrame(data)\nprint(df)\nd`;
+    const res = getSuggestions(code, code.length, 'src/main.py');
+    expect(res.items.some((i) => i.label === 'df')).toBe(true);
+    const dfItem = res.items.find((i) => i.label === 'df');
+    expect(dfItem?.kind).toBe('variable');
+  });
+
+  it('suggests exact match identifier such as name', () => {
+    const code = `def main():\n    name = input("What is your name? ")\n    print(f"Welcome, {name}!")\n    name`;
+    const res = getSuggestions(code, code.length, 'src/main.py');
+    expect(res.items.some((i) => i.label === 'name')).toBe(true);
+    expect(res.items[0].label).toBe('name');
+  });
+
+  it('suggests DataFrame methods on df.', () => {
+    const code = `import pandas as pd\ndf = pd.DataFrame(data)\ndf.`;
+    const res = getSuggestions(code, code.length, 'src/main.py');
+    expect(res.items.some((i) => i.label === 'head')).toBe(true);
+    expect(res.items.some((i) => i.label === 'describe')).toBe(true);
+    expect(res.items.some((i) => i.label === 'groupby')).toBe(true);
+    expect(res.items.some((i) => i.label === 'drop')).toBe(true);
+  });
+
+  it('correctly sets replaceStart when completing import statement to avoid duplication', () => {
+    const code = 'import sys\nimport pan';
+    const res = getSuggestions(code, code.length, 'src/main.py');
+    const pandasItem = res.items.find((i) => i.label === 'import pandas as pd');
+    expect(pandasItem).toBeDefined();
+    // replaceStart should point to start of 'import pan' line (index 11), not index 18
+    expect(res.replaceStart).toBe(11);
+  });
 });
