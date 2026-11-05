@@ -14,7 +14,7 @@ WhyDE allows instructors to author code templates, embed interactive programming
 
 ### 1. Instant Environment Configuration (URL Hashes)
 
-Instructors can configure the environment via URL hash parameters (e.g. `https://your-pages-url/#lang=python&blank=true&hideNewProject=true`):
+Instructors can configure the environment via URL hash parameters (e.g. `https://maltob.github.io/whyde/#lang=python&blank=true&hideNewProject=true`):
 
 | URL Parameter | Options | Description | Use Case |
 | :--- | :--- | :--- | :--- |
@@ -27,11 +27,11 @@ Instructors can configure the environment via URL hash parameters (e.g. `https:/
 
 #### Example Instructor Links
 * **Python Exam Mode** (No autocomplete, no syntax highlighting, no project switching):  
-  `https://your-site.edu/#lang=python&highlight=off&codeSuggest=0&hideNewProject=true`
+  `https://maltob.github.io/whyde/#lang=python&highlight=off&codeSuggest=0&hideNewProject=true`
 * **C++ Data Structures Lab Starter**:  
-  `https://your-site.edu/#lang=cpp&file=src/main.cpp`
+  `https://maltob.github.io/whyde/#lang=cpp&file=src/main.cpp`
 * **Java Blank Scratchpad**:  
-  `https://your-site.edu/#lang=java&blank=true`
+  `https://maltob.github.io/whyde/#lang=java&blank=true`
 
 ---
 
@@ -40,11 +40,11 @@ Instructors can configure the environment via URL hash parameters (e.g. `https:/
 Instructors can design complete multi-file project starters (including headers, test inputs, and starter files) and distribute them via **Portable Compressed Snapshots**:
 
 1. Open WhyDE and create your assignment files and folder hierarchy in the File Explorer.
-2. Click **Share** (or Export) to generate a portable URL fragment (`#p=v1.<base64url>`).
-3. Distribute this URL to students via your syllabus, LMS, or assignment page.
-4. When a student opens the link:
-   - A safe preview modal displays the assignment name and file structure.
-   - When the student clicks **Import**, a local copy is cloned into their browser's IndexedDB. Their modifications are private and never overwrite your original template.
+2. Click **Share** to open the link generator.
+3. Toggle any student restrictions (e.g., *Lock Project*, *Exam Mode*, or pick the initial active file).
+4. Click **Copy Link** to copy the snapshot URL (`https://maltob.github.io/whyde/#p=v1.<base64url>`).
+5. Distribute this URL to students via your syllabus, LMS, or assignment page.
+6. When a student opens the link, a local copy is cloned into their browser's IndexedDB. Their modifications are private and never overwrite your original template.
 
 ---
 
@@ -54,7 +54,7 @@ Because WhyDE does **not** rely on `Cross-Origin-Opener-Policy` (COOP) or `Cross
 
 ```html
 <iframe
-  src="https://your-username.github.io/whyde/#lang=python&hideNewProject=true"
+  src="https://maltob.github.io/whyde/#lang=python&hideNewProject=true"
   width="100%"
   height="700px"
   style="border: 1px solid #ccc; border-radius: 8px;"
@@ -93,7 +93,7 @@ Because WhyDE does **not** rely on `Cross-Origin-Opener-Policy` (COOP) or `Cross
 ### Local Development
 ```bash
 # Clone the repository
-git clone https://github.com/example/whyde.git
+git clone https://github.com/maltob/whyde.git
 cd whyde
 
 # Install workspace dependencies
