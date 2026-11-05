@@ -152,5 +152,32 @@ console.log("Hello, " + name + "!");
       expect(step2.exitCode).toBe(0);
       expect(step2.stdout).toContain('Hello, Grace Hopper!');
     });
+
+    it('prevents user JavaScript from accessing window, document, location, or redirecting', () => {
+      const hostileCode = `
+try {
+  window.location.href = "https://evil.com";
+} catch (e) {
+  console.log("Blocked window redirect:", e.name);
+}
+
+try {
+  document.body.innerHTML = "hacked";
+} catch (e) {
+  console.log("Blocked document edit:", e.name);
+}
+
+try {
+  location.replace("https://evil.com");
+} catch (e) {
+  console.log("Blocked location redirect:", e.name);
+}
+`;
+      const res = executeClientSideCode('javascript', hostileCode);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Blocked window redirect: TypeError');
+      expect(res.stdout).toContain('Blocked document edit: TypeError');
+      expect(res.stdout).toContain('Blocked location redirect: TypeError');
+    });
   });
 });

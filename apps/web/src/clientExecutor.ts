@@ -115,20 +115,55 @@ function runJavaScript(
   };
 
   try {
-    const fn = new Function('console', 'prompt', 'require', code);
-    fn(customConsole, customPrompt, (modulePath: string) => {
-      const file = allFiles.find((f) => f.path === modulePath || f.path.endsWith('/' + modulePath) || f.path === modulePath + '.js');
-      if (file) {
-        const exports: any = {};
-        const module = { exports };
-        const subFn = new Function('exports', 'module', 'console', 'require', file.content);
-        subFn(exports, module, customConsole, (p: string) => {
-          throw new Error(`Nested require not supported in sandbox for ${p}`);
-        });
-        return module.exports;
-      }
-      throw new Error(`Cannot find module '${modulePath}'`);
-    });
+    // Shadow sensitive browser DOM and navigation primitives to prevent DOM tampering or redirection
+    const sandboxParams = [
+      'console',
+      'prompt',
+      'require',
+      'window',
+      'document',
+      'location',
+      'top',
+      'parent',
+      'frames',
+      'localStorage',
+      'sessionStorage',
+      'indexedDB',
+      'fetch',
+      'XMLHttpRequest',
+      'WebSocket',
+    ];
+
+    const shadowValues = [
+      customConsole,
+      customPrompt,
+      (modulePath: string) => {
+        const file = allFiles.find((f) => f.path === modulePath || f.path.endsWith('/' + modulePath) || f.path === modulePath + '.js');
+        if (file) {
+          const exports: any = {};
+          const module = { exports };
+          const subFn = new Function('exports', 'module', ...sandboxParams, file.content);
+          subFn(exports, module, ...shadowValues);
+          return module.exports;
+        }
+        throw new Error(`Cannot find module '${modulePath}'`);
+      },
+      undefined, // window
+      undefined, // document
+      undefined, // location
+      undefined, // top
+      undefined, // parent
+      undefined, // frames
+      undefined, // localStorage
+      undefined, // sessionStorage
+      undefined, // indexedDB
+      undefined, // fetch
+      undefined, // XMLHttpRequest
+      undefined, // WebSocket
+    ];
+
+    const fn = new Function(...sandboxParams, code);
+    fn(...shadowValues);
 
     if (waitingForStdin) {
       return {
