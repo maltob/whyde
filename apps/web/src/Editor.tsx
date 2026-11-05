@@ -4,6 +4,7 @@ import 'prismjs/components/prism-c.js';
 import 'prismjs/components/prism-cpp.js';
 import 'prismjs/components/prism-java.js';
 import 'prismjs/components/prism-python.js';
+import 'prismjs/components/prism-javascript.js';
 import 'prismjs/components/prism-json.js';
 import 'prismjs/themes/prism-tomorrow.css';
 import { AlignLeft, Check, Palette, Sparkles } from 'lucide-react';
@@ -36,6 +37,11 @@ function getLanguage(filePath: string): string {
       return 'cpp';
     case 'java':
       return 'java';
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+    case 'javascript':
+      return 'javascript';
     case 'json':
       return 'json';
     default:

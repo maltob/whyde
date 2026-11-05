@@ -554,4 +554,95 @@ public class Main {
     expect(res.stdout).toContain('File name: input.txt\n');
     expect(res.stdout).toContain('File length: 33\n');
   });
+
+  it('supports Java 21 OCP features: Records, OOP Custom Classes & Inheritance, Stream API, and Sequenced Collections', async () => {
+    const javaCode = `
+package demo;
+
+import java.util.ArrayList;
+
+// 1. Java 14+ Record
+record Point(int x, int y) {
+}
+
+// 2. Custom OOP Class hierarchy with inheritance
+abstract class Animal {
+    protected String name;
+    public Animal(String name) {
+        this.name = name;
+    }
+    public String getName() {
+        return this.name;
+    }
+    public abstract String emitSound();
+}
+
+class Dog extends Animal {
+    public Dog(String name) {
+        super(name);
+    }
+    public String emitSound() {
+        return "Woof";
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        // Record test
+        Point p = new Point(10, 20);
+        System.out.println("Point x: " + p.x());
+        System.out.println("Point toString: " + p.toString());
+
+        // OOP test
+        Dog dog = new Dog("Buddy");
+        System.out.println("Animal: " + dog.getName() + " says " + dog.emitSound());
+
+        // Sequenced Collections (addFirst, addLast, getFirst, getLast, reversed)
+        ArrayList<Integer> nums = new ArrayList<>();
+        nums.add(2);
+        nums.addFirst(1);
+        nums.addLast(3);
+        System.out.println("First num: " + nums.getFirst());
+        System.out.println("Last num: " + nums.getLast());
+        System.out.println("Reversed size: " + nums.reversed().size());
+
+        // Stream API & functional pipeline
+        ArrayList<String> names = new ArrayList<>();
+        names.add("Alice");
+        names.add("Bob");
+        names.add("Charlie");
+        names.add("Amy");
+
+        long countA = names.stream().filter((n) -> n.startsWith("A")).count();
+        System.out.println("Count A: " + countA);
+
+        ArrayList<String> upper = names.stream().map((n) -> n.toUpperCase()).toList();
+        System.out.println("Upper first: " + upper.get(0));
+    }
+}
+`;
+
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-21-ocp-features',
+      name: 'Java 21 OCP Features',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: javaCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '21.0.0' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await compileAndRunJava(project);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Point x: 10');
+    expect(res.stdout).toContain('Point toString: Point[x=10, y=20]');
+    expect(res.stdout).toContain('Animal: Buddy says Woof');
+    expect(res.stdout).toContain('First num: 1');
+    expect(res.stdout).toContain('Last num: 3');
+    expect(res.stdout).toContain('Reversed size: 3');
+    expect(res.stdout).toContain('Count A: 2');
+    expect(res.stdout).toContain('Upper first: ALICE');
+  });
 });

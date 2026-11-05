@@ -9,7 +9,7 @@ export interface InterpretedExecutionResult {
 }
 
 export async function executeClientSideCodeAsync(
-  language: 'python' | 'java' | 'cpp',
+  language: 'python' | 'java' | 'cpp' | 'javascript',
   code: string,
   suppliedInput?: string | string[],
   allFiles: { path: string; content: string }[] = []
@@ -40,7 +40,7 @@ export async function executeClientSideCodeAsync(
 }
 
 export function executeClientSideCode(
-  language: 'python' | 'java' | 'cpp',
+  language: 'python' | 'java' | 'cpp' | 'javascript',
   code: string,
   suppliedInput?: string | string[],
   allFiles: { path: string; content: string }[] = []
@@ -50,6 +50,8 @@ export function executeClientSideCode(
       return runPython(code, suppliedInput, allFiles);
     } else if (language === 'java') {
       return executeJavaProgram(code, typeof suppliedInput === 'string' ? suppliedInput : suppliedInput?.[0], allFiles);
+    } else if (language === 'javascript') {
+      return runJavaScript(code, suppliedInput, allFiles);
     } else {
       return runCpp(code, typeof suppliedInput === 'string' ? suppliedInput : suppliedInput?.[0], allFiles);
     }
@@ -57,6 +59,95 @@ export function executeClientSideCode(
     return {
       stdout: '',
       stderr: `Runtime Error: ${err?.message || err}\n`,
+      exitCode: 1,
+    };
+  }
+}
+
+/**
+ * In-browser sandbox executor for JavaScript code.
+ * Captures console.log/error/warn and supports prompt() input.
+ */
+function runJavaScript(
+  code: string,
+  suppliedInput?: string | string[],
+  allFiles: { path: string; content: string }[] = []
+): InterpretedExecutionResult {
+  let stdout = '';
+  let stderr = '';
+
+  const inputQueue = Array.isArray(suppliedInput)
+    ? [...suppliedInput]
+    : suppliedInput !== undefined
+      ? [suppliedInput]
+      : [];
+
+  let waitingForStdin: { requestId: string; prompt: string } | null = null;
+
+  const customConsole = {
+    log: (...args: any[]) => {
+      const line = args.map((a) => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' ') + '\n';
+      stdout += line;
+    },
+    error: (...args: any[]) => {
+      const line = args.map((a) => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' ') + '\n';
+      stderr += line;
+    },
+    warn: (...args: any[]) => {
+      const line = args.map((a) => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' ') + '\n';
+      stdout += line;
+    },
+    info: (...args: any[]) => {
+      const line = args.map((a) => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' ') + '\n';
+      stdout += line;
+    },
+  };
+
+  const customPrompt = (msg?: string): string | null => {
+    if (inputQueue.length > 0) {
+      return inputQueue.shift()!;
+    }
+    waitingForStdin = {
+      requestId: `js-stdin-${Date.now()}`,
+      prompt: msg || 'Enter input: ',
+    };
+    return null;
+  };
+
+  try {
+    const fn = new Function('console', 'prompt', 'require', code);
+    fn(customConsole, customPrompt, (modulePath: string) => {
+      const file = allFiles.find((f) => f.path === modulePath || f.path.endsWith('/' + modulePath) || f.path === modulePath + '.js');
+      if (file) {
+        const exports: any = {};
+        const module = { exports };
+        const subFn = new Function('exports', 'module', 'console', 'require', file.content);
+        subFn(exports, module, customConsole, (p: string) => {
+          throw new Error(`Nested require not supported in sandbox for ${p}`);
+        });
+        return module.exports;
+      }
+      throw new Error(`Cannot find module '${modulePath}'`);
+    });
+
+    if (waitingForStdin) {
+      return {
+        stdout,
+        stderr,
+        exitCode: 0,
+        requiresStdin: waitingForStdin,
+      };
+    }
+
+    return {
+      stdout: stdout || (stderr ? '' : 'Program completed with no output.\n'),
+      stderr,
+      exitCode: stderr ? 1 : 0,
+    };
+  } catch (err: any) {
+    return {
+      stdout,
+      stderr: stderr + `Error: ${err?.message || err}\n`,
       exitCode: 1,
     };
   }

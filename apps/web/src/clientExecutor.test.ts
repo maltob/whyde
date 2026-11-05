@@ -131,5 +131,26 @@ public class Main {
       const res = executeClientSideCode('java', javaCode);
       expect(res.stdout).toContain('Hello from Java!');
     });
+
+    it('executes in-browser JavaScript with console.log, array mapping, and prompt input', () => {
+      const jsCode = `
+const numbers = [1, 2, 3, 4];
+const doubled = numbers.map(x => x * 2);
+console.log("Doubled:", doubled.join(", "));
+
+const name = prompt("Enter your name: ");
+console.log("Hello, " + name + "!");
+`;
+      // Step 1: initial run requires stdin
+      const step1 = executeClientSideCode('javascript', jsCode);
+      expect(step1.stdout).toContain('Doubled: 2, 4, 6, 8');
+      expect(step1.requiresStdin).toBeDefined();
+      expect(step1.requiresStdin?.prompt).toBe('Enter your name: ');
+
+      // Step 2: run with supplied input
+      const step2 = executeClientSideCode('javascript', jsCode, 'Grace Hopper');
+      expect(step2.exitCode).toBe(0);
+      expect(step2.stdout).toContain('Hello, Grace Hopper!');
+    });
   });
 });
