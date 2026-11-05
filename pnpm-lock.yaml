@@ -28,6 +28,9 @@ importers:
       '@ide/runner-python':
         specifier: workspace:*
         version: link:../../packages/runner-python
+      '@ide/sharing':
+        specifier: workspace:*
+        version: link:../../packages/sharing
       '@ide/storage-browser':
         specifier: workspace:*
         version: link:../../packages/storage-browser

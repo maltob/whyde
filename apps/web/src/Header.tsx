@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Save, HardDrive, WifiOff, Loader2 } from 'lucide-react';
+import { Play, Square, Save, HardDrive, WifiOff, Loader2, Share2 } from 'lucide-react';
 import { Project } from '@ide/project-model';
 
 interface HeaderProps {
@@ -11,6 +11,7 @@ interface HeaderProps {
   onRun: () => void;
   onStop: () => void;
   onNewProject: (lang: 'python' | 'java' | 'cpp', blank?: boolean) => void;
+  onShare?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRun,
   onStop,
   onNewProject,
+  onShare,
 }) => {
   return (
     <header
@@ -141,6 +143,38 @@ export const Header: React.FC<HeaderProps> = ({
               <option value="cpp-blank">C++ (Blank)</option>
             </optgroup>
           </select>
+        )}
+
+        {/* Share Button */}
+        {onShare && (
+          <button
+            aria-label="Share Project"
+            title="Share Snapshot URL"
+            onClick={onShare}
+            style={{
+              backgroundColor: '#1e293b',
+              color: '#38bdf8',
+              border: '1px solid #38bdf8',
+              padding: '5px 12px',
+              borderRadius: '4px',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(56, 189, 248, 0.15)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = '#1e293b';
+            }}
+          >
+            <Share2 size={14} />
+            Share
+          </button>
         )}
 
         {/* Run / Compiling / Stop buttons */}

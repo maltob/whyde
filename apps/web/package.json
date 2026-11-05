@@ -15,6 +15,7 @@
     "@ide/project-model": "workspace:*",
     "@ide/runner-java": "workspace:*",
     "@ide/runner-python": "workspace:*",
+    "@ide/sharing": "workspace:*",
     "@ide/storage-browser": "workspace:*",
     "@types/js-beautify": "^1.14.3",
     "@types/prismjs": "^1.26.6",

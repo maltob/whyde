@@ -24,6 +24,7 @@ interface FileTreeProps {
   onRenameFile?: (oldPath: string, newPath: string) => void;
   onMoveFile?: (sourcePath: string, targetDirPath: string) => void;
   onDuplicateFile?: (path: string) => void;
+  onUploadFiles?: (uploaded: { path: string; content: string }[]) => void;
 }
 
 interface TreeNode {
@@ -219,6 +220,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   onRenameFile,
   onMoveFile,
   onDuplicateFile,
+  onUploadFiles,
 }) => {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [isCreating, setIsCreating] = useState(false);
@@ -237,8 +239,37 @@ export const FileTree: React.FC<FileTreeProps> = ({
   // Drag & Drop State
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
 
   const tree = useMemo(() => buildTree(files), [files]);
+
+  // Handle external native OS file drops (drag and drop file upload)
+  const handleNativeDrop = async (e: React.DragEvent) => {
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExternalDragOver(false);
+
+    const uploaded: { path: string; content: string }[] = [];
+    const fileList = Array.from(e.dataTransfer.files);
+
+    for (const f of fileList) {
+      try {
+        const text = await f.text();
+        // sanitize name
+        const cleanName = f.name.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
+        if (cleanName) {
+          uploaded.push({ path: cleanName, content: text });
+        }
+      } catch (err) {
+        console.error('Failed to read dropped file:', f.name, err);
+      }
+    }
+
+    if (uploaded.length > 0 && onUploadFiles) {
+      onUploadFiles(uploaded);
+    }
+  };
 
   // Close context menu on external click or Escape key
   useEffect(() => {
@@ -533,6 +564,24 @@ export const FileTree: React.FC<FileTreeProps> = ({
   return (
     <nav
       aria-label="Project Files"
+      onDragOver={(e) => {
+        // Detect if external files are being dragged over the explorer
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setIsExternalDragOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsExternalDragOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleNativeDrop(e);
+        }
+      }}
       onContextMenu={(e) => {
         // Right-clicking empty space in tree opens Root Context Menu
         if (e.target === e.currentTarget || (e.target as HTMLElement).getAttribute('data-empty-drop-zone')) {
@@ -541,13 +590,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
       }}
       style={{
         width: '240px',
-        backgroundColor: '#090d16',
+        backgroundColor: isExternalDragOver ? 'rgba(56, 189, 248, 0.05)' : '#090d16',
         color: '#f8fafc',
         display: 'flex',
         flexDirection: 'column',
         borderRight: '1px solid #1e293b',
+        border: isExternalDragOver ? '2px dashed #38bdf8' : undefined,
         userSelect: 'none',
         position: 'relative',
+        transition: 'all 0.15s ease',
       }}
     >
       <div
@@ -655,6 +706,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
         data-empty-drop-zone="true"
         onDragOver={(e) => {
           e.preventDefault();
+          if (e.dataTransfer.types.includes('Files')) {
+            e.dataTransfer.dropEffect = 'copy';
+            setIsExternalDragOver(true);
+            return;
+          }
           e.dataTransfer.dropEffect = 'move';
           if (draggedPath && draggedPath.includes('/')) {
             setDragOverPath('__ROOT__');
@@ -664,6 +720,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onDrop={(e) => {
           e.preventDefault();
           setDragOverPath(null);
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleNativeDrop(e);
+            return;
+          }
           const src = e.dataTransfer.getData('text/plain');
           if (src && src.includes('/')) {
             onMoveFile?.(src, '');
@@ -684,7 +744,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           transition: 'all 0.15s ease',
         }}
       >
-        {isRootDragOver ? 'Drop here to move to Root' : ''}
+        {isRootDragOver ? 'Drop here to move to Root' : isExternalDragOver ? 'Drop file to upload' : ''}
       </div>
 
       {/* Right-Click Context Menu Popup */}

@@ -13,6 +13,7 @@ import { compileAndRunCpp } from '@ide/runner-cpp';
 import { compileAndRunJava } from '@ide/runner-java';
 import { parseUrlHash, setUrlHash } from './hashParams.js';
 import { yieldToMainThread } from './yieldHelper.js';
+import { exportProjectToUrlHash, importProjectFromUrlHash } from '@ide/sharing';
 
 const repo = new IndexedDbProjectRepository();
 
@@ -78,6 +79,10 @@ export const App: React.FC = () => {
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
+  const [shareModalUrl, setShareModalUrl] = useState<string | null>(null);
+  const [shareExceedsLimit, setShareExceedsLimit] = useState<boolean>(false);
+  const [copiedShare, setCopiedShare] = useState<boolean>(false);
+
   // Initialize storage repository & load last project or fallback to starter
   useEffect(() => {
     const autoSave = new AutoSaveManager(repo, {
@@ -87,6 +92,18 @@ export const App: React.FC = () => {
     autoSaveRef.current = autoSave;
 
     repo.list().then(async (list) => {
+      // Check if URL has a snapshot hash (#p=v1.<payload>)
+      if (typeof window !== 'undefined' && window.location.hash.includes('#p=v1.')) {
+        const importRes = importProjectFromUrlHash(window.location.hash);
+        if (importRes.success && importRes.project) {
+          setProject(importRes.project);
+          setActiveFilePath(importRes.project.entrypoint);
+          const rev = await repo.save(importRes.project);
+          autoSave.setInitialRevision(rev);
+          return;
+        }
+      }
+
       // If user provided a specific language/blank via URL hash, prioritize it
       if (initialHash.lang || initialHash.blank) {
         const lang = initialHash.lang || 'python';
@@ -240,6 +257,39 @@ export const App: React.FC = () => {
     setProject(updatedProj);
     setActiveFilePath(copyPath);
     autoSaveRef.current?.scheduleSave(updatedProj);
+  };
+
+  const handleUploadFiles = (uploaded: { path: string; content: string }[]) => {
+    if (uploaded.length === 0) return;
+    let newFiles = [...project.files];
+    let lastPath = activeFilePath;
+
+    for (const item of uploaded) {
+      const existingIdx = newFiles.findIndex((f) => f.path === item.path);
+      if (existingIdx >= 0) {
+        newFiles[existingIdx] = { path: item.path, encoding: 'utf-8', content: item.content };
+      } else {
+        newFiles.push({ path: item.path, encoding: 'utf-8', content: item.content });
+      }
+      lastPath = item.path;
+    }
+
+    const updatedProj: Project = {
+      ...project,
+      files: newFiles,
+      updatedAt: new Date().toISOString(),
+    };
+    setProject(updatedProj);
+    setActiveFilePath(lastPath);
+    autoSaveRef.current?.scheduleSave(updatedProj);
+  };
+
+  const handleShareClick = () => {
+    const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+    const { url, exceedsUrlLimit } = exportProjectToUrlHash(project, origin);
+    setShareModalUrl(url);
+    setShareExceedsLimit(exceedsUrlLimit);
+    setCopiedShare(false);
   };
 
   const handleNewProject = async (lang: 'python' | 'java' | 'cpp', blank: boolean = false) => {
@@ -662,6 +712,7 @@ export const App: React.FC = () => {
         onRun={handleRun}
         onStop={handleStop}
         onNewProject={handleNewProject}
+        onShare={handleShareClick}
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <FileTree
@@ -677,6 +728,7 @@ export const App: React.FC = () => {
           onRenameFile={handleRenameFile}
           onMoveFile={handleMoveFile}
           onDuplicateFile={handleDuplicateFile}
+          onUploadFiles={handleUploadFiles}
         />
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           {/* Main Workspace Top Tabs (Editor / Terminal) */}
@@ -818,6 +870,137 @@ export const App: React.FC = () => {
           })()}
         </div>
       </div>
+
+      {/* Share Snapshot Modal */}
+      {shareModalUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-dialog-title"
+          onClick={() => setShareModalUrl(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '16px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#0f172a',
+              border: '1px solid #334155',
+              borderRadius: '8px',
+              maxWidth: '560px',
+              width: '100%',
+              padding: '20px',
+              color: '#f8fafc',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h2 id="share-dialog-title" style={{ fontSize: '1.1rem', fontWeight: 600, color: '#38bdf8', margin: 0 }}>
+                Share Project Snapshot
+              </h2>
+              <button
+                onClick={() => setShareModalUrl(null)}
+                aria-label="Close"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '12px', lineHeight: 1.5 }}>
+              This portable URL encodes an immutable compressed snapshot of your files and starter code. Opening this link allows anyone to import this project into their local workspace.
+            </p>
+
+            {shareExceedsLimit && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid #ef4444',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  fontSize: '0.8rem',
+                  color: '#fca5a5',
+                  marginBottom: '12px',
+                }}
+              >
+                ⚠️ URL length exceeds the 8 KiB browser limit. Consider reducing project file sizes or number of assets.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <input
+                readOnly
+                value={shareModalUrl}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#020617',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                  padding: '8px 10px',
+                  color: '#e2e8f0',
+                  fontSize: '0.8rem',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(shareModalUrl);
+                  setCopiedShare(true);
+                  setTimeout(() => setCopiedShare(false), 2500);
+                }}
+                style={{
+                  backgroundColor: copiedShare ? '#16a34a' : '#0284c7',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '0 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background-color 0.15s ease',
+                }}
+              >
+                {copiedShare ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShareModalUrl(null)}
+                style={{
+                  backgroundColor: '#1e293b',
+                  color: '#cbd5e1',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  padding: '6px 16px',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
