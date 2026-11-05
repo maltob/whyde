@@ -1,160 +1,142 @@
-# Browser IDE (WhyDE)
+# WhyDE (Browser IDE)
 
-A fast, static, client-side web IDE and Progressive Web App (PWA) supporting **Python (>= 3.14)**, **C++ (>= C++17)**, and **Java (>= 11)** with **zero required backend servers**.
+**WhyDE** is a fast, completely serverless in-browser coding environment and Progressive Web App (PWA). It runs **Python**, **C++**, and **Java** code 100% locally inside the web browser using WebAssembly.
 
-Designed specifically for computer science education, course lab assignments, interactive textbook embeds, and exams:
-- All compilation and execution runs 100% inside the student's browser via WebAssembly (Clang/WASI & Pyodide) and an in-memory Java runtime.
-- Works offline, loads from any generic static HTTPS host (such as GitHub Pages or AWS S3), and requires no server-side execution containers or custom isolation headers (`COOP`/`COEP`).
+No backend servers to set up, no Docker containers to maintain, no subscription fees, and no special server headers needed.
 
 ---
 
-## Guide for Instructors & Faculty
+## What Does It Look Like?
 
-WhyDE allows instructors to author code templates, embed interactive programming environments into course pages, and configure student environments simply using **URL parameters** and **URL snapshots**.
+![WhyDE In-Browser IDE Interface](docs/images/screenshot.png)
 
-### 1. Instant Environment Configuration (URL Hashes)
+> **Where to put your screenshot:**  
+> Place your screenshot image at [`docs/images/screenshot.png`](docs/images/screenshot.png). You can take a screenshot of your browser running WhyDE and save it there, and it will render right here on GitHub!
 
-Instructors can configure the environment via URL hash parameters (e.g. `https://maltob.github.io/whyde/#lang=python&blank=true&hideNewProject=true`):
+WhyDE provides a clean, familiar coding workspace:
+- **Left Panel**: Multi-file explorer with folder hierarchies and drag-and-drop file upload.
+- **Center**: Fast Monaco code editor with syntax color themes, standard library autocomplete, line numbers, and error squiggles.
+- **Right / Bottom Panel**: Interactive execution terminal supporting keyboard input (`cin`, `input()`, `Scanner`), execution logs, and plotting tabs.
 
-| URL Parameter | Options | Description | Use Case |
+---
+
+## Try It Live
+
+👉 **Launch in your browser:** [https://maltob.github.io/whyde](https://maltob.github.io/whyde)
+
+---
+
+## How Do I Use It?
+
+### 1. As a Student or Developer
+1. **Choose a language**: Select Python, C++, or Java from the top navigation bar.
+2. **Write or drop in your files**: Click `+ New File`, or drag and drop code files from your desktop straight into the file explorer.
+3. **Click Run**: Watch your code compile and execute instantly with non-blocking WebAssembly. If your code asks for input (e.g. `name = input("What is your name? ")`), simply type into the integrated terminal.
+4. **Work offline**: WhyDE installs as a PWA and caches all files locally in your browser's IndexedDB. Your work is saved automatically as you type.
+
+### 2. As an Instructor or Course Author
+WhyDE was built to make sharing assignments effortless:
+1. **Prepare your assignment starter**: Open WhyDE, add your starter code, templates, and reference files.
+2. **Click Share**: In the top bar, click the **Share** button.
+3. **Configure student options**: Choose whether to hide project creation, disable autocomplete (for exam mode), or open a specific starter file on load.
+4. **Copy & Share the Link**: Click **Copy Link**. When students open this link, WhyDE instantly opens your exact assignment workspace in their browser without overwriting your original.
+5. **Embed in Canvas, Blackboard, or LMS**: Paste the URL into any `<iframe>` in your course portal. Because WhyDE does not require isolation headers (`COOP`/`COEP`), it embeds seamlessly.
+
+---
+
+## Key Features
+
+- **No Server Infrastructure**: Runs completely on GitHub Pages, Cloudflare Pages, S3, or any basic web hosting.
+- **Interactive Stdin**: Full real-time keyboard inputs for `input()`, `std::cin`, and `Scanner(System.in)`.
+- **Drag-and-Drop Explorer**: Drop files directly into the project explorer to import data files, headers, or assets.
+- **Course & Exam Modes**: Customize or lock down student environments using simple URL flags (e.g., `#lang=python&highlight=off&codeSuggest=0`).
+- **Offline PWA Support**: Install to your desktop or Chromebook and code on planes, trains, or offline classrooms.
+- **Accessibility First**: Designed and audited for **WCAG 2.2 AA** keyboard navigation, screen readers, and high-contrast color schemes.
+
+---
+
+## Instructor Guide & URL Parameters
+
+Configure any student session by appending hash parameters to your URL (e.g. `https://maltob.github.io/whyde/#lang=python&blank=true`):
+
+| URL Parameter | Options | Description | Common Use Case |
 | :--- | :--- | :--- | :--- |
-| `lang` | `python`, `cpp`, `java` | Selects default project language on launch. | Pre-selecting language for an assignment. |
-| `blank` | `true`, `1`, `false` | When `true`, opens a clean empty file instead of hello-world starter code. | Homework and scratchpad exercises. |
-| `hideNewProject` | `true`, `1`, `false` | Hides the "+ New Project" button in the navigation bar. | Restricting students to the single active lab. |
-| `highlight` | `on`, `off`, `0` | Controls syntax color highlighting in the editor. When `off`, syntax coloring is disabled and the toolbar color button is hidden. | Exam and quiz mode. |
-| `codeSuggest` | `1`, `0` | Controls standard library & keyword code autocomplete suggestions. When `0`, autocomplete is disabled and the suggest button is hidden. | Exam mode or testing raw syntax recall. |
-| `file` | path (e.g. `src/main.cpp`) | Opens and focuses a specific file within the workspace on load. | Directing student focus to a specific starter file. |
+| `lang` | `python`, `cpp`, `java` | Pre-selects the project language on launch. | Linking directly to a Python or Java lab. |
+| `file` | Path (e.g. `src/main.cpp`) | Sets which file is open and focused in the editor. | Directing attention to the starter file. |
+| `blank` | `true`, `1` | Opens with an empty file instead of template code. | Scratchpads, quizzes, and homework. |
+| `hideNewProject`| `true`, `1` | Hides the "+ New Project" button in the navigation bar. | Keeping students focused on the active lab. |
+| `highlight` | `on`, `off` | Toggles syntax highlighting on or off. | Testing raw syntax knowledge in exams. |
+| `codeSuggest` | `1`, `0` | Enables or disables code autocompletion. | Exam mode or testing syntax recall. |
 
-#### Example Instructor Links
-* **Python Exam Mode** (No autocomplete, no syntax highlighting, no project switching):  
+### Ready-to-Use Instructor Examples
+- **Python Exam Mode** (No autocomplete, no syntax highlighting, project creation hidden):  
   `https://maltob.github.io/whyde/#lang=python&highlight=off&codeSuggest=0&hideNewProject=true`
-* **C++ Data Structures Lab Starter**:  
+- **C++ Starter Lab**:  
   `https://maltob.github.io/whyde/#lang=cpp&file=src/main.cpp`
-* **Java Blank Scratchpad**:  
+- **Java Blank Scratchpad**:  
   `https://maltob.github.io/whyde/#lang=java&blank=true`
 
----
-
-### 2. Sharing Starter Projects & Multi-File Assignments
-
-Instructors can design complete multi-file project starters (including headers, test inputs, and starter files) and distribute them via **Portable Compressed Snapshots**:
-
-1. Open WhyDE and create your assignment files and folder hierarchy in the File Explorer.
-2. Click **Share** to open the link generator.
-3. Toggle any student restrictions (e.g., *Lock Project*, *Exam Mode*, or pick the initial active file).
-4. Click **Copy Link** to copy the snapshot URL (`https://maltob.github.io/whyde/#p=v1.<base64url>`).
-5. Distribute this URL to students via your syllabus, LMS, or assignment page.
-6. When a student opens the link, a local copy is cloned into their browser's IndexedDB. Their modifications are private and never overwrite your original template.
-
----
-
-### 3. Embedding in Canvas, Blackboard, Moodle, or Course Websites
-
-Because WhyDE does **not** rely on `Cross-Origin-Opener-Policy` (COOP) or `Cross-Origin-Embedder-Policy` (COEP) headers, it can be embedded directly in an `<iframe>` within any LMS or textbook:
-
+### Embedding in an LMS (Canvas, Moodle, Blackboard)
 ```html
 <iframe
   src="https://maltob.github.io/whyde/#lang=python&hideNewProject=true"
   width="100%"
   height="700px"
-  style="border: 1px solid #ccc; border-radius: 8px;"
+  style="border: 1px solid #e2e8f0; border-radius: 8px;"
   allow="clipboard-read; clipboard-write">
 </iframe>
 ```
-*(Note: `allow="clipboard-read; clipboard-write"` enables standard code copy/pasting in the browser editor).*
 
 ---
 
-### 4. Language Features & Capabilities
-
-* **Python 3.14 (Pyodide WASM)**:
-  * Full Python standard library support.
-  * Real-time interactive standard input (`input()`) via terminal.
-  * Built-in turtle graphics and matplotlib plotting tab.
-* **C++ (C++17/C++20 via Clang WASM & WASI)**:
-  * Standard C++ runtime with `iostream`, `vector`, `string`, `cmath`, and STL containers.
-  * Non-blocking compilation yielding to UI at 60fps.
-  * Multi-file project support (`.h`, `.cpp`) with virtual file system mounts.
-* **Java (Java 11+ compatible in-browser runtime)**:
-  * Classes, user methods, recursion, and switch statements.
-  * Autoboxing and primitive/reference casting.
-  * Exception handling (`try-catch-finally`).
-  * In-memory Virtual File I/O (`java.io.File`, `Scanner(File)`).
-
----
-
-## Developer Quickstart
+## Local Development & Contribution
 
 ### Prerequisites
 - Node.js >= 20
 - pnpm >= 9
-- (Optional, for LTI / enterprise grader services): .NET SDK >= 9.0 or 10.0
 
-### Local Development
+### Quick Start
 ```bash
 # Clone the repository
 git clone https://github.com/maltob/whyde.git
 cd whyde
 
-# Install workspace dependencies
+# Install dependencies
 pnpm install
 
-# Build all packages and applications
-pnpm build
-
-# Run all unit and integration test suites
-pnpm test
-
-# Start the web IDE locally
+# Run Vite development server
 pnpm --filter @ide/web dev
 ```
 
-### GitHub Actions CI & Pages Deployment
-
-The repository includes a unified GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
-- Automatically runs tests, type checks, and linter across all packages on push and pull requests.
-- Builds production bundles and packages a standalone distributable `release-web.zip`.
-- Automatically deploys the static application to **GitHub Pages** on every push to `master`/`main`.
-
-To enable GitHub Pages in your fork or repository:
-1. Go to **Settings > Pages** in your GitHub repository.
-2. Under **Build and deployment > Source**, select **GitHub Actions**.
+### Building for Production
+```bash
+# Download offline wheels, compile packages and web application
+pnpm download:wheels
+pnpm build
+```
 
 ---
 
-## Monorepo Layout
+## Monorepo Architecture
 
 ```text
 whyde/
 ├── apps/
-│   └── web/                     # React + Vite static SPA frontend & PWA Service Worker
+│   └── web/                   # React + Vite static SPA frontend & PWA Service Worker
 ├── packages/
-│   ├── execution-contracts/     # RuntimeProvider interfaces & lifecycle contracts
-│   ├── project-model/           # Zod schema validation & path traversal defenses
-│   ├── storage-browser/         # IndexedDB project repository & debounced autosave
-│   ├── runner-python/           # Python 3.14 Pyodide worker runtime adapter
-│   ├── runner-cpp/              # C++17+ Clang/LLD/WASI compiler & toolchain manifest
-│   ├── sharing/                 # Compressed URL snapshots & 8 KiB budget budgeting
-│   ├── assignments/             # Instructor assignment models, grading & rubric reports
-│   └── integration-contracts/   # LocalOnlyProvider & optional LTI contracts
-├── optional-services/
-│   ├── lti-gateway/             # Optional standalone ASP.NET Core Canvas LTI 1.3 gateway
-│   └── trusted-grader/          # Optional isolated sandboxed grading service
-└── docs/                        # Architectural decision records, threat model, a11y audit
+│   ├── execution-contracts/   # RuntimeProvider interfaces & lifecycle contracts
+│   ├── project-model/         # Zod schemas, validation & path defenses
+│   ├── storage-browser/       # IndexedDB project repository & debounced autosave
+│   ├── runner-python/         # Python 3.14 Pyodide worker runtime
+│   ├── runner-cpp/            # C++17+ Clang/LLD/WASI compiler toolchain
+│   ├── runner-java/           # In-memory Java parser & interpreter
+│   └── sharing/               # Compressed URL snapshot encoder & parser
+├── docs/                      # Accessibility audit, architecture records & threat model
+└── scripts/                   # Pyodide offline wheel download automation
 ```
-
----
-
-## Documentation Links
-
-- **Deployment Guide**: [`docs/deployment-guide.md`](docs/deployment-guide.md)
-- **Threat Model & Security Policy**: [`docs/threat-model.md`](docs/threat-model.md)
-- **WCAG 2.2 AA Accessibility Audit**: [`docs/accessibility-audit-wcag22.md`](docs/accessibility-audit-wcag22.md)
-- **Architectural Decision Records (ADRs)**: [`docs/adr/`](docs/adr/)
-- **Third-Party Notices**: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 
 ---
 
 ## License
 
-Licensed under the Apache License 2.0. Third-party components retain their respective open-source licenses (see `THIRD_PARTY_NOTICES.md`).
+Licensed under the [Apache License, Version 2.0](LICENSE).
