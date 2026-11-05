@@ -1,5 +1,6 @@
 import { loadPyodide } from 'pyodide';
 import { MainToWorkerMessage } from './index.js';
+import { TURTLE_SHIM_PY } from './turtleShim.js';
 
 let pyodideInstance: any = null;
 let stdinQueue: string[] = [];
@@ -28,7 +29,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     try {
       const pyodide = await getPyodide();
 
-      // Auto-detect or include requested packages (numpy, pandas, regex, pytest, etc.)
+      // Auto-detect or include requested packages (numpy, pandas, regex, pytest, matplotlib, scikit-learn, pillow, requests, hypothesis)
       const packagesToLoad = new Set<string>();
       const allCode = request.project.files.map((f) => f.content).join('\n');
 
@@ -36,6 +37,16 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       if (/\b(import\s+pandas|from\s+pandas)\b/.test(allCode)) packagesToLoad.add('pandas');
       if (/\b(import\s+regex|from\s+regex)\b/.test(allCode)) packagesToLoad.add('regex');
       if (/\b(import\s+pytest|from\s+pytest)\b/.test(allCode)) packagesToLoad.add('pytest');
+      if (/\b(import\s+matplotlib|from\s+matplotlib)\b/.test(allCode)) packagesToLoad.add('matplotlib');
+      if (/\b(import\s+sklearn|from\s+sklearn)\b/.test(allCode)) packagesToLoad.add('scikit-learn');
+      if (/\b(import\s+PIL|from\s+PIL|import\s+pillow|from\s+pillow)\b/.test(allCode)) packagesToLoad.add('pillow');
+      if (/\b(import\s+requests|from\s+requests)\b/.test(allCode)) {
+        packagesToLoad.add('requests');
+        packagesToLoad.add('pyodide-http');
+      }
+      if (/\b(import\s+hypothesis|from\s+hypothesis)\b/.test(allCode)) {
+        packagesToLoad.add('hypothesis');
+      }
 
       if (packagesToLoad.size > 0 && typeof pyodide.loadPackage === 'function') {
         try {
@@ -43,6 +54,18 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         } catch (e) {
           console.warn('Could not load requested packages:', Array.from(packagesToLoad), e);
         }
+      }
+
+      if (packagesToLoad.has('requests')) {
+        try {
+          await pyodide.runPythonAsync(`
+try:
+    import pyodide_http
+    pyodide_http.patch_all()
+except Exception:
+    pass
+`);
+        } catch {}
       }
 
       pyodide.setStdout({
@@ -82,6 +105,12 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           } catch {}
         }
         pyodide.FS.writeFile(normPath, file.content);
+      }
+
+      if (/\b(import\s+turtle|from\s+turtle)\b/.test(allCode)) {
+        try {
+          pyodide.FS.writeFile('/turtle.py', TURTLE_SHIM_PY);
+        } catch {}
       }
 
       const entryPath = request.project.entrypoint.startsWith('/')

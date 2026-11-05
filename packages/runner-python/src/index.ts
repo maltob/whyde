@@ -12,6 +12,7 @@ export * from './pyodideRunner.js';
 export type WorkerToMainMessage =
   | { type: 'stdout'; text: string }
   | { type: 'stderr'; text: string }
+  | { type: 'plot'; dataUrl: string }
   | { type: 'stdin-request'; requestId: string; prompt?: string }
   | {
       type: 'diagnostic';

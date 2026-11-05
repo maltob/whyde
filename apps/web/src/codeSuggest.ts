@@ -93,7 +93,83 @@ const PYTHON_SUGGESTIONS: SuggestionItem[] = [
   { label: 'import math', insertText: 'import math\n', kind: 'module', documentation: 'Mathematical functions.' },
   { label: 'import sys', insertText: 'import sys\n', kind: 'module', documentation: 'System-specific parameters and functions.' },
   { label: 'import json', insertText: 'import json\n', kind: 'module', documentation: 'JSON encoder and decoder.' },
+  { label: 'import matplotlib.pyplot as plt', insertText: 'import matplotlib.pyplot as plt\n', kind: 'module', documentation: 'Matplotlib state-based plotting interface.' },
+  { label: 'import numpy as np', insertText: 'import numpy as np\n', kind: 'module', documentation: 'NumPy scientific computing package.' },
+  { label: 'import pandas as pd', insertText: 'import pandas as pd\n', kind: 'module', documentation: 'Pandas fast, powerful data structures.' },
+  { label: 'import requests', insertText: 'import requests\n', kind: 'module', documentation: 'HTTP library for humans.' },
+  { label: 'import turtle', insertText: 'import turtle\n', kind: 'module', documentation: 'Educational turtle graphics library.' },
+  { label: 'import pytest', insertText: 'import pytest\n', kind: 'module', documentation: 'Python testing framework.' },
+  { label: 'from PIL import Image', insertText: 'from PIL import Image\n', kind: 'module', documentation: 'Pillow imaging library.' },
 ];
+
+const MEMBER_COMPLETIONS: Record<string, SuggestionItem[]> = {
+  plt: [
+    { label: 'plot', insertText: 'plot($0)', kind: 'function', detail: 'plot(x, y, [fmt])', documentation: 'Plot y versus x as lines and/or markers.' },
+    { label: 'show', insertText: 'show()', kind: 'function', detail: 'show()', documentation: 'Display all open figures.' },
+    { label: 'scatter', insertText: 'scatter($0, )', kind: 'function', detail: 'scatter(x, y)', documentation: 'A scatter plot of y vs. x.' },
+    { label: 'bar', insertText: 'bar($0, )', kind: 'function', detail: 'bar(x, height)', documentation: 'Make a bar plot.' },
+    { label: 'title', insertText: 'title("$0")', kind: 'function', detail: 'title(label)', documentation: 'Set a title for the Axes.' },
+    { label: 'xlabel', insertText: 'xlabel("$0")', kind: 'function', detail: 'xlabel(xlabel)', documentation: 'Set the label for the x-axis.' },
+    { label: 'ylabel', insertText: 'ylabel("$0")', kind: 'function', detail: 'ylabel(ylabel)', documentation: 'Set the label for the y-axis.' },
+    { label: 'legend', insertText: 'legend()', kind: 'function', detail: 'legend()', documentation: 'Place a legend on the Axes.' },
+    { label: 'figure', insertText: 'figure(figsize=($1, $2))', kind: 'function', detail: 'figure()', documentation: 'Create a new figure.' },
+    { label: 'subplots', insertText: 'subplots()', kind: 'function', detail: 'fig, ax = plt.subplots()', documentation: 'Create a figure and a set of subplots.' },
+  ],
+  turtle: [
+    { label: 'forward', insertText: 'forward($0)', kind: 'function', detail: 'forward(distance)', documentation: 'Move turtle forward.' },
+    { label: 'backward', insertText: 'backward($0)', kind: 'function', detail: 'backward(distance)', documentation: 'Move turtle backward.' },
+    { label: 'right', insertText: 'right($0)', kind: 'function', detail: 'right(angle)', documentation: 'Turn turtle right.' },
+    { label: 'left', insertText: 'left($0)', kind: 'function', detail: 'left(angle)', documentation: 'Turn turtle left.' },
+    { label: 'penup', insertText: 'penup()', kind: 'function', detail: 'penup()', documentation: 'Pull the pen up.' },
+    { label: 'pendown', insertText: 'pendown()', kind: 'function', detail: 'pendown()', documentation: 'Pull the pen down.' },
+    { label: 'circle', insertText: 'circle($0)', kind: 'function', detail: 'circle(radius, extent=None)', documentation: 'Draw a circle with given radius.' },
+    { label: 'color', insertText: 'color("$0")', kind: 'function', detail: 'color(*args)', documentation: 'Return or set pencolor and fillcolor.' },
+    { label: 'pensize', insertText: 'pensize($0)', kind: 'function', detail: 'pensize(width)', documentation: 'Set line thickness.' },
+    { label: 'done', insertText: 'done()', kind: 'function', detail: 'done()', documentation: 'Starts event loop or flushes drawing.' },
+    { label: 'Turtle', insertText: 'Turtle()', kind: 'class', detail: 'class Turtle', documentation: 'Construct a new Turtle object.' },
+    { label: 'Screen', insertText: 'Screen()', kind: 'class', detail: 'class Screen', documentation: 'Return singleton Screen object.' },
+  ],
+  t: [
+    { label: 'forward', insertText: 'forward($0)', kind: 'function', detail: 'forward(distance)', documentation: 'Move turtle forward.' },
+    { label: 'backward', insertText: 'backward($0)', kind: 'function', detail: 'backward(distance)', documentation: 'Move turtle backward.' },
+    { label: 'right', insertText: 'right($0)', kind: 'function', detail: 'right(angle)', documentation: 'Turn turtle right.' },
+    { label: 'left', insertText: 'left($0)', kind: 'function', detail: 'left(angle)', documentation: 'Turn turtle left.' },
+    { label: 'penup', insertText: 'penup()', kind: 'function', detail: 'penup()', documentation: 'Pull the pen up.' },
+    { label: 'pendown', insertText: 'pendown()', kind: 'function', detail: 'pendown()', documentation: 'Pull the pen down.' },
+    { label: 'circle', insertText: 'circle($0)', kind: 'function', detail: 'circle(radius, extent=None)', documentation: 'Draw a circle with given radius.' },
+    { label: 'color', insertText: 'color("$0")', kind: 'function', detail: 'color(*args)', documentation: 'Return or set pencolor and fillcolor.' },
+    { label: 'pensize', insertText: 'pensize($0)', kind: 'function', detail: 'pensize(width)', documentation: 'Set line thickness.' },
+    { label: 'done', insertText: 'done()', kind: 'function', detail: 'done()', documentation: 'Starts event loop or flushes drawing.' },
+  ],
+  np: [
+    { label: 'array', insertText: 'array([$0])', kind: 'function', detail: 'array(object)', documentation: 'Create an array.' },
+    { label: 'linspace', insertText: 'linspace($1, $2, $3)', kind: 'function', detail: 'linspace(start, stop, num=50)', documentation: 'Return evenly spaced numbers over interval.' },
+    { label: 'arange', insertText: 'arange($0)', kind: 'function', detail: 'arange([start,] stop[, step,])', documentation: 'Return evenly spaced values.' },
+    { label: 'zeros', insertText: 'zeros(($0))', kind: 'function', detail: 'zeros(shape)', documentation: 'Return a new array filled with zeros.' },
+    { label: 'ones', insertText: 'ones(($0))', kind: 'function', detail: 'ones(shape)', documentation: 'Return a new array filled with ones.' },
+    { label: 'mean', insertText: 'mean($0)', kind: 'function', detail: 'mean(a)', documentation: 'Compute arithmetic mean.' },
+    { label: 'pi', insertText: 'pi', kind: 'variable', detail: '3.141592653589793', documentation: 'Mathematical constant pi.' },
+  ],
+  pd: [
+    { label: 'DataFrame', insertText: 'DataFrame($0)', kind: 'class', detail: 'DataFrame(data=None)', documentation: 'Two-dimensional tabular data.' },
+    { label: 'Series', insertText: 'Series($0)', kind: 'class', detail: 'Series(data=None)', documentation: 'One-dimensional ndarray with labels.' },
+    { label: 'read_csv', insertText: 'read_csv("$0")', kind: 'function', detail: 'read_csv(filepath)', documentation: 'Read CSV into DataFrame.' },
+  ],
+  requests: [
+    { label: 'get', insertText: 'get("$0")', kind: 'function', detail: 'get(url, **kwargs)', documentation: 'Sends a GET request.' },
+    { label: 'post', insertText: 'post("$0", json={})', kind: 'function', detail: 'post(url, data=None, json=None, **kwargs)', documentation: 'Sends a POST request.' },
+  ],
+  std: [
+    { label: 'cout', insertText: 'cout << $0 << std::endl;', kind: 'function', detail: 'std::ostream cout', documentation: 'Standard output stream.' },
+    { label: 'cin', insertText: 'cin >> $0;', kind: 'function', detail: 'std::istream cin', documentation: 'Standard input stream.' },
+    { label: 'endl', insertText: 'endl', kind: 'variable', documentation: 'Inserts newline and flushes stream.' },
+    { label: 'vector', insertText: 'vector<${1:int}> $0;', kind: 'class', detail: 'std::vector<T>', documentation: 'Dynamic size sequence container.' },
+    { label: 'string', insertText: 'string $0;', kind: 'class', detail: 'std::string', documentation: 'Standard character string.' },
+    { label: 'sort', insertText: 'sort($1.begin(), $1.end());', kind: 'function', detail: 'void sort(RandomIt first, RandomIt last)', documentation: 'Sorts elements in range.' },
+    { label: 'max', insertText: 'max($0, )', kind: 'function', detail: 'T max(a, b)', documentation: 'Returns the greater value.' },
+    { label: 'min', insertText: 'min($0, )', kind: 'function', detail: 'T min(a, b)', documentation: 'Returns the smaller value.' },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Context Scanner: extracts symbols from code and detects file contexts
@@ -102,7 +178,8 @@ export function getSuggestions(
   currentCode: string,
   cursorIndex: number,
   filePath: string,
-  allFilePaths: string[] = []
+  allFilePaths: string[] = [],
+  allFiles: { path: string; content: string }[] = []
 ): { items: SuggestionItem[]; prefix: string; replaceStart: number } {
   const textBeforeCursor = currentCode.slice(0, cursorIndex);
 
@@ -130,7 +207,35 @@ export function getSuggestions(
     return { items: filtered, prefix: filePrefix, replaceStart };
   }
 
-  // 2. Detect general word or member prefix
+  // 2. Member Access Completion: e.g. `plt.`, `turtle.`, `np.`, `std::`
+  const memberMatch = textBeforeCursor.match(/([A-Za-z0-9_]+)(?:\.|::)([A-Za-z0-9_]*)$/);
+  if (memberMatch) {
+    const objectName = memberMatch[1];
+    const memberPrefix = memberMatch[2];
+    const replaceStart = cursorIndex - memberPrefix.length;
+
+    if (MEMBER_COMPLETIONS[objectName]) {
+      const candidates = MEMBER_COMPLETIONS[objectName];
+      const lower = memberPrefix.toLowerCase();
+      const matched = candidates.filter((item) =>
+        item.label.toLowerCase().startsWith(lower) || item.label.toLowerCase().includes(lower)
+      );
+      matched.sort((a, b) => {
+        const aStarts = a.label.toLowerCase().startsWith(lower);
+        const bStarts = b.label.toLowerCase().startsWith(lower);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return a.label.length - b.label.length;
+      });
+      return {
+        items: matched.slice(0, 15),
+        prefix: memberPrefix,
+        replaceStart,
+      };
+    }
+  }
+
+  // 3. Detect general word or member prefix
   const wordMatch = textBeforeCursor.match(/([A-Za-z0-9_$.:]+)$/);
   if (!wordMatch) {
     return { items: [], prefix: '', replaceStart: cursorIndex };
@@ -150,14 +255,55 @@ export function getSuggestions(
     baseSuggestions = PYTHON_SUGGESTIONS;
   }
 
-  // 3. Extract identifiers declared in current file
+  // 4. Extract symbols & functions declared in the current file AND other project files
   const identifiers = new Set<string>();
-  const idRegex = /\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g;
-  let match: RegExpExecArray | null;
-  while ((match = idRegex.exec(currentCode)) !== null) {
-    const id = match[0];
-    if (id !== prefix) {
-      identifiers.add(id);
+  const customFunctions: SuggestionItem[] = [];
+
+  const filesToScan = allFiles.length > 0 ? allFiles : [{ path: filePath, content: currentCode }];
+
+  for (const f of filesToScan) {
+    const code = f.path === filePath ? currentCode : f.content;
+    const isOtherFile = f.path !== filePath;
+
+    // Scan Python function definitions: def my_func(a, b):
+    const pyFuncRegex = /def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\):/g;
+    let funcMatch: RegExpExecArray | null;
+    while ((funcMatch = pyFuncRegex.exec(code)) !== null) {
+      const fname = funcMatch[1];
+      const params = funcMatch[2].trim();
+      customFunctions.push({
+        label: fname,
+        insertText: `${fname}($0)`,
+        kind: 'function',
+        detail: `def ${fname}(${params})`,
+        documentation: isOtherFile ? `Function from ${f.path}` : 'Locally defined function',
+      });
+    }
+
+    // Scan C++ function definitions: void/int/double my_func(...) {
+    const cppFuncRegex = /(?:void|int|double|float|bool|std::string|auto)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g;
+    while ((funcMatch = cppFuncRegex.exec(code)) !== null) {
+      const fname = funcMatch[1];
+      const params = funcMatch[2].trim();
+      if (fname !== 'main') {
+        customFunctions.push({
+          label: fname,
+          insertText: `${fname}($0)`,
+          kind: 'function',
+          detail: `${fname}(${params})`,
+          documentation: isOtherFile ? `Function from ${f.path}` : 'Locally defined function',
+        });
+      }
+    }
+
+    // General identifiers
+    const idRegex = /\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g;
+    let match: RegExpExecArray | null;
+    while ((match = idRegex.exec(code)) !== null) {
+      const id = match[0];
+      if (id !== prefix) {
+        identifiers.add(id);
+      }
     }
   }
 
@@ -168,7 +314,7 @@ export function getSuggestions(
     detail: 'Identifier',
   }));
 
-  const all = [...baseSuggestions, ...projectSymbols];
+  const all = [...customFunctions, ...baseSuggestions, ...projectSymbols];
   const lowerPrefix = prefix.toLowerCase();
 
   const filtered = all.filter((s) => {
@@ -182,11 +328,26 @@ export function getSuggestions(
     const bStarts = b.label.toLowerCase().startsWith(lowerPrefix);
     if (aStarts && !bStarts) return -1;
     if (!aStarts && bStarts) return 1;
+
+    // Prioritize functions over generic raw identifiers
+    if (a.kind === 'function' && b.kind !== 'function') return -1;
+    if (a.kind !== 'function' && b.kind === 'function') return 1;
+
     return a.label.length - b.label.length;
   });
 
+  // Deduplicate by label
+  const seen = new Set<string>();
+  const uniqueItems: SuggestionItem[] = [];
+  for (const item of filtered) {
+    if (!seen.has(item.label)) {
+      seen.add(item.label);
+      uniqueItems.push(item);
+    }
+  }
+
   return {
-    items: filtered.slice(0, 15),
+    items: uniqueItems.slice(0, 15),
     prefix,
     replaceStart,
   };

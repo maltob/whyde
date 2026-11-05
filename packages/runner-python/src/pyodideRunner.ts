@@ -1,4 +1,5 @@
 import { Project, RuntimeEvent } from '@ide/execution-contracts';
+import { TURTLE_SHIM_PY } from './turtleShim.js';
 
 let cachedPyodidePromise: Promise<any> | null = null;
 
@@ -45,6 +46,7 @@ export interface PythonExecutionOptions {
   onStdout?: (text: string) => void;
   onStderr?: (text: string) => void;
   onEvent?: (event: RuntimeEvent) => void;
+  onPlot?: (dataUrl: string) => void;
   maxRunTimeMs?: number;
   indexURL?: string;
   requestStdin?: (prompt: string) => Promise<string>;
@@ -60,7 +62,7 @@ export async function executePythonInPyodide(
   const startTime = Date.now();
   const pyodide = await getPyodideInstance({ indexURL: options.indexURL });
 
-  // Auto-detect or include requested packages (numpy, pandas, regex, pytest, etc.)
+  // Auto-detect or include requested packages (numpy, pandas, regex, pytest, matplotlib, scikit-learn, pillow, requests, hypothesis)
   const packagesToLoad = new Set<string>(options.packages || []);
   const allCode = project.files.map((f) => f.content).join('\n');
 
@@ -68,6 +70,16 @@ export async function executePythonInPyodide(
   if (/\b(import\s+pandas|from\s+pandas)\b/.test(allCode)) packagesToLoad.add('pandas');
   if (/\b(import\s+regex|from\s+regex)\b/.test(allCode)) packagesToLoad.add('regex');
   if (/\b(import\s+pytest|from\s+pytest)\b/.test(allCode)) packagesToLoad.add('pytest');
+  if (/\b(import\s+matplotlib|from\s+matplotlib)\b/.test(allCode)) packagesToLoad.add('matplotlib');
+  if (/\b(import\s+sklearn|from\s+sklearn)\b/.test(allCode)) packagesToLoad.add('scikit-learn');
+  if (/\b(import\s+PIL|from\s+PIL|import\s+pillow|from\s+pillow)\b/.test(allCode)) packagesToLoad.add('pillow');
+  if (/\b(import\s+requests|from\s+requests)\b/.test(allCode)) {
+    packagesToLoad.add('requests');
+    packagesToLoad.add('pyodide-http');
+  }
+  if (/\b(import\s+hypothesis|from\s+hypothesis)\b/.test(allCode)) {
+    packagesToLoad.add('hypothesis');
+  }
 
   if (packagesToLoad.size > 0 && typeof pyodide.loadPackage === 'function') {
     try {
@@ -75,6 +87,19 @@ export async function executePythonInPyodide(
     } catch (e) {
       console.warn('Could not load requested packages:', Array.from(packagesToLoad), e);
     }
+  }
+
+  // If requests is loaded, automatically patch requests/urllib with pyodide-http
+  if (packagesToLoad.has('requests')) {
+    try {
+      await pyodide.runPythonAsync(`
+try:
+    import pyodide_http
+    pyodide_http.patch_all()
+except Exception:
+    pass
+`);
+    } catch {}
   }
 
   // Redirect stdout and stderr
@@ -99,8 +124,7 @@ export async function executePythonInPyodide(
   // Stdin handling
   const lines = options.stdin !== undefined && options.stdin !== '' ? options.stdin.split('\n') : [];
   
-  // Custom input bridging so input(...) prompts the user with the actual prompt text
-  // without triggering Emscripten FS Errno 29 I/O errors or window.prompt blocked errors
+  // Custom input & visual plot bridging
   try {
     pyodide.registerJsModule('_ide_runner_io', {
       get_input: async (promptText?: string) => {
@@ -134,6 +158,10 @@ export async function executePythonInPyodide(
           }
         }
         return '';
+      },
+      show_plot: (dataUrl: string) => {
+        options.onPlot?.(dataUrl);
+        options.onEvent?.({ type: 'plot', dataUrl });
       },
     });
   } catch {}
@@ -169,6 +197,17 @@ export async function executePythonInPyodide(
   // and bind custom input handler if available
   const entryPath = project.entrypoint.startsWith('/') ? project.entrypoint : '/' + project.entrypoint;
   const entryDir = entryPath.substring(0, entryPath.lastIndexOf('/')) || '/';
+
+  // Provide browser-compatible turtle shim in Pyodide FS if user code imports turtle
+  const allCodeCheck = project.files.map((f) => f.content).join('\n');
+  if (/\b(import\s+turtle|from\s+turtle)\b/.test(allCodeCheck)) {
+    try {
+      pyodide.FS.writeFile('/turtle.py', TURTLE_SHIM_PY);
+      if (entryDir !== '/') {
+        pyodide.FS.writeFile(`${entryDir}/turtle.py`, TURTLE_SHIM_PY);
+      }
+    } catch {}
+  }
   await pyodide.runPythonAsync(`
 import sys, os, builtins, ast
 if '${entryDir}' not in sys.path:
@@ -181,6 +220,27 @@ except Exception:
 try:
     import _ide_runner_io
     builtins.input = _ide_runner_io.get_input
+except Exception:
+    pass
+
+try:
+    import matplotlib
+    import matplotlib.pyplot as _plt
+    import io, base64
+
+    def _ide_show_plot(*args, **kwargs):
+        try:
+            buf = io.BytesIO()
+            _plt.savefig(buf, format="png", bbox_inches="tight")
+            buf.seek(0)
+            b64_data = base64.b64encode(buf.read()).decode("utf-8")
+            _plt.close("all")
+            if b64_data:
+                _ide_runner_io.show_plot(f"data:image/png;base64,{b64_data}")
+        except Exception as e:
+            print(f"[Matplotlib error]: {e}", file=sys.stderr)
+
+    _plt.show = _ide_show_plot
 except Exception:
     pass
 

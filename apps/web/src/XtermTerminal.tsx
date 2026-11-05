@@ -1,12 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { Terminal as TerminalIcon, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { Terminal as TerminalIcon, Trash2, Maximize2, Minimize2, Image as ImageIcon } from 'lucide-react';
 
 export interface TerminalProps {
   logs: { type: 'stdout' | 'stderr' | 'info'; text: string }[];
   pendingStdin: { requestId: string; prompt?: string } | null;
+  plots?: string[];
   onSupplyStdin: (requestId: string, input: string) => void;
   onData?: (data: string) => void;
   onClear: () => void;
@@ -19,6 +20,7 @@ export interface TerminalProps {
 export const XtermTerminal: React.FC<TerminalProps> = ({
   logs,
   pendingStdin,
+  plots = [],
   onSupplyStdin,
   onData,
   onClear,
@@ -27,11 +29,19 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
   isMaximized = false,
   onToggleMaximize,
 }) => {
+  const [activeBottomTab, setActiveBottomTab] = useState<'terminal' | 'plots'>('terminal');
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lineBufferRef = useRef<string>('');
   const lastRenderedLogIndexRef = useRef<number>(0);
+
+  // Switch to plots tab automatically when a new plot arrives
+  useEffect(() => {
+    if (plots.length > 0) {
+      setActiveBottomTab('plots');
+    }
+  }, [plots.length]);
 
   // Keep latest callbacks/props in refs so listeners don't have stale closures
   const pendingStdinRef = useRef(pendingStdin);
@@ -203,7 +213,7 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
     >
       <div
         style={{
-          padding: '6px 16px',
+          padding: '4px 16px',
           backgroundColor: '#0f172a',
           borderBottom: '1px solid #1e293b',
           display: 'flex',
@@ -213,9 +223,46 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
           color: '#94a3b8',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <TerminalIcon size={14} />
-          <span>TERMINAL EMULATOR (VT100 / XTERM)</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => setActiveBottomTab('terminal')}
+            style={{
+              background: activeBottomTab === 'terminal' ? '#1e293b' : 'none',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 8px',
+              color: activeBottomTab === 'terminal' ? '#38bdf8' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.78rem',
+              fontWeight: 500,
+            }}
+          >
+            <TerminalIcon size={13} />
+            <span>TERMINAL</span>
+          </button>
+
+          <button
+            onClick={() => setActiveBottomTab('plots')}
+            style={{
+              background: activeBottomTab === 'plots' ? '#1e293b' : 'none',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 8px',
+              color: activeBottomTab === 'plots' ? '#38bdf8' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.78rem',
+              fontWeight: 500,
+            }}
+          >
+            <ImageIcon size={13} />
+            <span>PLOTS {plots.length > 0 ? `(${plots.length})` : ''}</span>
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
@@ -262,8 +309,49 @@ export const XtermTerminal: React.FC<TerminalProps> = ({
           flex: 1,
           padding: '8px 12px',
           overflow: 'hidden',
+          display: activeBottomTab === 'terminal' ? 'block' : 'none',
         }}
       />
+
+      {activeBottomTab === 'plots' && (
+        <div
+          style={{
+            flex: 1,
+            padding: '16px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+            backgroundColor: '#070b14',
+          }}
+        >
+          {plots.length === 0 ? (
+            <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '30px' }}>
+              No visual plots generated yet. Run a script with Matplotlib <code>plt.show()</code> to view plots here.
+            </div>
+          ) : (
+            plots.map((plotUrl, idx) => (
+              <div
+                key={idx}
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '6px',
+                  padding: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)',
+                  maxWidth: '100%',
+                }}
+              >
+                <img
+                  src={plotUrl}
+                  alt={`Plot ${idx + 1}`}
+                  style={{ maxWidth: '100%', height: 'auto', display: 'block', borderRadius: '4px' }}
+                />
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </section>
   );
 };

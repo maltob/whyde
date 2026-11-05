@@ -48,6 +48,7 @@ export type RuntimeEvent =
   | { type: 'stdout'; text: string }
   | { type: 'stderr'; text: string }
   | { type: 'stdin-request'; requestId: string; prompt?: string }
+  | { type: 'plot'; dataUrl: string }
   | {
       type: 'diagnostic';
       file?: string;

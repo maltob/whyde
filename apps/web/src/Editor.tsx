@@ -20,6 +20,7 @@ interface EditorProps {
   onToggleCodeSuggest?: (enabled: boolean) => void;
   showSuggestButton?: boolean;
   allFilePaths?: string[];
+  allFiles?: { path: string; content: string }[];
   onChange: (newContent: string) => void;
 }
 
@@ -52,6 +53,7 @@ export const Editor: React.FC<EditorProps> = ({
   onToggleCodeSuggest,
   showSuggestButton = true,
   allFilePaths = [],
+  allFiles = [],
   onChange,
 }) => {
   const [internalSyntaxColoring, setInternalSyntaxColoring] = useState<boolean>(syntaxColoring);
@@ -97,7 +99,7 @@ export const Editor: React.FC<EditorProps> = ({
       setSuggestions([]);
       return;
     }
-    const res = getSuggestions(text, cursor, filePath, allFilePaths);
+    const res = getSuggestions(text, cursor, filePath, allFilePaths, allFiles);
     if (res.items.length > 0 && res.prefix.length >= 1) {
       setSuggestions(res.items);
       setSelectedIndex(0);
