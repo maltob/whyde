@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Download Offline Pyodide Wheels
+        run: node scripts/download-pyodide-wheels.mjs
+
       - name: Run Test Suites
         run: pnpm test
 

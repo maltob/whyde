@@ -860,6 +860,33 @@ export async function compileAndRunJava(
     }
   }
 
+  class JavaFileScanner {
+    private lines: string[];
+    private lineIdx: number = 0;
+    constructor(source: any) {
+      let content = '';
+      if (source instanceof JavaFile) {
+        content = getVirtualContent(source.path) || '';
+      } else if (typeof source === 'string') {
+        content = source;
+      }
+      this.lines = content.split(/\r?\n/).filter((l) => l.length > 0);
+    }
+    hasNextLine(): boolean {
+      return this.lineIdx < this.lines.length;
+    }
+    nextLine(): string {
+      return this.lineIdx < this.lines.length ? this.lines[this.lineIdx++] : '';
+    }
+    hasNext(): boolean {
+      return this.hasNextLine();
+    }
+    next(): string {
+      return this.nextLine();
+    }
+    close(): void {}
+  }
+
   // 3. Scan user-defined static methods across all files in project
   const userMethods: Record<string, { returnType: string; paramNames: string[]; bodyStr: string }> = {};
   const methodRegex = /(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*\{/g;
@@ -906,6 +933,9 @@ export async function compileAndRunJava(
       let l = raw.trim();
       if (!l || l.startsWith('//') || l.startsWith('/*') || l.startsWith('*')) continue;
 
+      // In JS, string/array .length() does not exist; convert to .length unless it's a known method
+      l = l.replace(/\.length\(\)/g, '.length');
+
       const retMatch = l.match(/^return(?:\s+([\s\S]*))?;?$/);
       if (retMatch) {
         const expr = retMatch[1] ? retMatch[1].trim().replace(/;+$/, '') : '';
@@ -940,7 +970,12 @@ export async function compileAndRunJava(
         /^(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);?$/
       );
       if (varDecl) {
-        jsLines.push(`let ${varDecl[1]} = ${varDecl[2]};`);
+        let valExpr = varDecl[2];
+        const isIntType = /^(?:int|long|short|byte)\b/.test(l);
+        if (isIntType && valExpr.includes('/')) {
+          valExpr = `Math.floor(${valExpr})`;
+        }
+        jsLines.push(`let ${varDecl[1]} = ${valExpr};`);
         continue;
       }
 
@@ -992,6 +1027,7 @@ export async function compileAndRunJava(
   const scope: Record<string, any> = {
     args: [],
     File: JavaFile,
+    Scanner: JavaFileScanner,
     ...boundUserMethods,
   };
 
@@ -1091,11 +1127,21 @@ export async function compileAndRunJava(
 
     // Scanner input reads: Boolean b= scanner.nextBoolean(); String name = scanner.nextLine(); int age = scanner.nextInt(); etc.
     const scannerCallMatch = rawLine.match(
-      /(?:(?:[A-Za-z0-9_<>[\]]+\s+)?([A-Za-z0-9_]+)\s*=\s*)?.*scanner\.(next[A-Za-z]*)\s*\(\)\s*;?/
+      /(?:(?:[A-Za-z0-9_<>[\]]+\s+)?([A-Za-z0-9_]+)\s*=\s*)?([A-Za-z0-9_]+)\.(next[A-Za-z]*)\s*\(\)\s*;?/
     );
     if (scannerCallMatch && !rawLine.startsWith('System.out')) {
       const varName = scannerCallMatch[1];
-      const method = scannerCallMatch[2];
+      const scannerInstName = scannerCallMatch[2];
+      const method = scannerCallMatch[3];
+
+      // If scanner instance exists in scope and has nextLine / next, use it (e.g. fileScanner)
+      if (scope[scannerInstName] && typeof scope[scannerInstName][method] === 'function') {
+        const val = scope[scannerInstName][method]();
+        if (varName) {
+          scope[varName] = val;
+        }
+        return;
+      }
 
       let rawVal: string | null;
       if (method === 'nextLine') {
@@ -1222,7 +1268,7 @@ export async function compileAndRunJava(
     }
 
     // Compound assignment: x += 5; x -= 2; x *= 3; x /= 2; x %= 2;
-    const compoundAssignMatch = rawLine.match(/^([A-Za-z0-9_]+)\s*(\+=|-=|\*=\/=|%=)\s*([^;]+);?$/);
+    const compoundAssignMatch = rawLine.match(/^([A-Za-z0-9_]+)\s*(\+=|-=|\*=|\/=|%=)\s*([^;]+);?$/);
     if (compoundAssignMatch) {
       const vName = compoundAssignMatch[1];
       const op = compoundAssignMatch[2];

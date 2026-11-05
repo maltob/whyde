@@ -1,10 +1,42 @@
 import { executeJavaProgram } from './javaEngine.js';
+import { compileAndRunJava } from '@ide/runner-java';
 
 export interface InterpretedExecutionResult {
   stdout: string;
   stderr: string;
   exitCode: number;
   requiresStdin?: { requestId: string; prompt: string };
+}
+
+export async function executeClientSideCodeAsync(
+  language: 'python' | 'java' | 'cpp',
+  code: string,
+  suppliedInput?: string | string[],
+  allFiles: { path: string; content: string }[] = []
+): Promise<InterpretedExecutionResult> {
+  if (language === 'java') {
+    const project = {
+      schemaVersion: 1 as const,
+      id: 'java-client-exec',
+      name: 'Java Workspace',
+      language: 'java' as const,
+      entrypoint: allFiles.find((f) => f.content === code)?.path || 'Main.java',
+      files: allFiles.length > 0 ? allFiles.map((f) => ({ path: f.path, encoding: 'utf-8' as const, content: f.content })) : [{ path: 'Main.java', encoding: 'utf-8' as const, content: code }],
+      toolchain: { runtimeId: 'java-browser', requestedVersion: '11.0.0' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const res = await compileAndRunJava(project, {
+      stdin: suppliedInput,
+    });
+    return {
+      stdout: res.stdout,
+      stderr: res.stderr,
+      exitCode: res.exitCode,
+      requiresStdin: res.requiresStdin,
+    };
+  }
+  return executeClientSideCode(language, code, suppliedInput, allFiles);
 }
 
 export function executeClientSideCode(

@@ -43,3 +43,6 @@ Thumbs.db
 # Release artifacts
 *.zip
 release/
+
+# Pre-bundled offline Pyodide wheel binaries (downloaded in CI/build via scripts/download-pyodide-wheels.mjs)
+apps/web/public/pyodide/*.whl

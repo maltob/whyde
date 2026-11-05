@@ -336,8 +336,11 @@ export const App: React.FC = () => {
     await yieldToMainThread();
 
     if (project.language === 'python') {
+      const localPyodideUrl = typeof window !== 'undefined'
+        ? (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'pyodide/')
+        : undefined;
       executePythonInPyodide(project, {
-        indexURL: typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'pyodide/') : undefined,
+        indexURL: localPyodideUrl,
         stdin: undefined,
         onStdout: (text) => {
           setLogs((prev) => [...prev, { type: 'stdout', text }]);
