@@ -35,6 +35,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
 
       if (/\b(import\s+numpy|from\s+numpy)\b/.test(allCode)) packagesToLoad.add('numpy');
       if (/\b(import\s+pandas|from\s+pandas)\b/.test(allCode)) packagesToLoad.add('pandas');
+      if (/\b(import\s+seaborn|from\s+seaborn)\b/.test(allCode)) packagesToLoad.add('seaborn');
       if (/\b(import\s+regex|from\s+regex)\b/.test(allCode)) packagesToLoad.add('regex');
       if (/\b(import\s+pytest|from\s+pytest)\b/.test(allCode)) packagesToLoad.add('pytest');
       if (/\b(import\s+matplotlib|from\s+matplotlib)\b/.test(allCode)) packagesToLoad.add('matplotlib');

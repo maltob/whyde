@@ -31,7 +31,7 @@ function getDeps(targets) {
   return visited;
 }
 
-const targetPackages = ['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'pillow', 'requests', 'regex', 'pyodide-http'];
+const targetPackages = ['seaborn', 'pandas', 'numpy', 'matplotlib', 'scikit-learn', 'pillow', 'requests', 'regex', 'pyodide-http'];
 const needed = Array.from(getDeps(targetPackages));
 const filesToDownload = needed.map(pkg => lock.packages[pkg]?.file_name).filter(Boolean);
 
@@ -48,7 +48,10 @@ function downloadFile(fileName) {
       }
     }
 
-    const url = `https://cdn.jsdelivr.net/pyodide/v314.0.7/full/${fileName}`;
+    let url = `https://cdn.jsdelivr.net/pyodide/v314.0.7/full/${fileName}`;
+    if (fileName.startsWith('seaborn-')) {
+      url = `https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/${fileName}`;
+    }
     console.log(`[DOWNLOADING] ${fileName}...`);
     const fileStream = fs.createWriteStream(destPath);
 
