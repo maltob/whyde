@@ -39,3 +39,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Release artifacts
+*.zip
+release/
