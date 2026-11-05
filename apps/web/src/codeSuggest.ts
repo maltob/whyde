@@ -9,6 +9,54 @@ export interface SuggestionItem {
 // ---------------------------------------------------------------------------
 // Standard Library & Common APIs
 // ---------------------------------------------------------------------------
+const JAVA_COMMON_IMPORTS: { path: string; label: string; doc: string }[] = [
+  // java.util
+  { path: 'java.util.Scanner', label: 'java.util.Scanner;', doc: 'Simple text scanner for parsing primitives and strings.' },
+  { path: 'java.util.ArrayList', label: 'java.util.ArrayList;', doc: 'Resizable-array implementation of the List interface.' },
+  { path: 'java.util.List', label: 'java.util.List;', doc: 'An ordered collection (sequence).' },
+  { path: 'java.util.Map', label: 'java.util.Map;', doc: 'An object that maps keys to values.' },
+  { path: 'java.util.HashMap', label: 'java.util.HashMap;', doc: 'Hash table based implementation of the Map interface.' },
+  { path: 'java.util.Set', label: 'java.util.Set;', doc: 'A collection that contains no duplicate elements.' },
+  { path: 'java.util.HashSet', label: 'java.util.HashSet;', doc: 'Set backed by a hash table (actually a HashMap instance).' },
+  { path: 'java.util.Arrays', label: 'java.util.Arrays;', doc: 'Static methods for manipulating arrays (sorting, searching, printing).' },
+  { path: 'java.util.Collections', label: 'java.util.Collections;', doc: 'Polymorphic algorithms and wrapper factories for collections.' },
+  { path: 'java.util.Random', label: 'java.util.Random;', doc: 'Generator of pseudorandom numbers.' },
+  { path: 'java.util.Queue', label: 'java.util.Queue;', doc: 'Collection designed for holding elements prior to processing.' },
+  { path: 'java.util.LinkedList', label: 'java.util.LinkedList;', doc: 'Doubly-linked list implementation of the List and Deque interfaces.' },
+  { path: 'java.util.PriorityQueue', label: 'java.util.PriorityQueue;', doc: 'An unbounded priority queue based on a priority heap.' },
+  { path: 'java.util.Optional', label: 'java.util.Optional;', doc: 'A container object which may or may not contain a non-null value.' },
+  { path: 'java.util.Objects', label: 'java.util.Objects;', doc: 'Utility methods for operating on objects (equals, hash, requireNonNull).' },
+  { path: 'java.util.*', label: 'java.util.*;', doc: 'Import all utility classes from java.util.' },
+
+  // java.io
+  { path: 'java.io.File', label: 'java.io.File;', doc: 'An abstract representation of file and directory pathnames.' },
+  { path: 'java.io.FileReader', label: 'java.io.FileReader;', doc: 'Convenience class for reading character files.' },
+  { path: 'java.io.FileWriter', label: 'java.io.FileWriter;', doc: 'Convenience class for writing character files.' },
+  { path: 'java.io.BufferedReader', label: 'java.io.BufferedReader;', doc: 'Reads text from a character-input stream, buffering characters.' },
+  { path: 'java.io.BufferedWriter', label: 'java.io.BufferedWriter;', doc: 'Writes text to a character-output stream, buffering characters.' },
+  { path: 'java.io.PrintWriter', label: 'java.io.PrintWriter;', doc: 'Prints formatted representations of objects to a text-output stream.' },
+  { path: 'java.io.InputStream', label: 'java.io.InputStream;', doc: 'Abstract superclass of all classes representing an input stream of bytes.' },
+  { path: 'java.io.OutputStream', label: 'java.io.OutputStream;', doc: 'Abstract superclass of all classes representing an output stream of bytes.' },
+  { path: 'java.io.IOException', label: 'java.io.IOException;', doc: 'Signals that an I/O exception of some sort has occurred.' },
+  { path: 'java.io.*', label: 'java.io.*;', doc: 'Import all I/O classes from java.io.' },
+
+  // java.math
+  { path: 'java.math.BigInteger', label: 'java.math.BigInteger;', doc: 'Immutable arbitrary-precision integers.' },
+  { path: 'java.math.BigDecimal', label: 'java.math.BigDecimal;', doc: 'Immutable, arbitrary-precision signed decimal numbers.' },
+
+  // java.time
+  { path: 'java.time.LocalDate', label: 'java.time.LocalDate;', doc: 'A date without a time-zone in the ISO-8601 calendar system.' },
+  { path: 'java.time.LocalTime', label: 'java.time.LocalTime;', doc: 'A time without a time-zone in the ISO-8601 calendar system.' },
+  { path: 'java.time.LocalDateTime', label: 'java.time.LocalDateTime;', doc: 'A date-time without a time-zone in the ISO-8601 calendar system.' },
+  { path: 'java.time.Duration', label: 'java.time.Duration;', doc: 'A time-based amount of time, such as "34.5 seconds".' },
+  { path: 'java.time.Instant', label: 'java.time.Instant;', doc: 'An instantaneous point on the time-line.' },
+
+  // java.nio.file
+  { path: 'java.nio.file.Files', label: 'java.nio.file.Files;', doc: 'Static methods that operate on files, directories, or other types of files.' },
+  { path: 'java.nio.file.Path', label: 'java.nio.file.Path;', doc: 'An object that may be used to locate a file in a file system.' },
+  { path: 'java.nio.file.Paths', label: 'java.nio.file.Paths;', doc: 'Static methods to create a Path from a String or URI.' },
+];
+
 const JAVA_SUGGESTIONS: SuggestionItem[] = [
   // Output & I/O
   { label: 'System.out.println', insertText: 'System.out.println($0);', kind: 'function', detail: 'void println(Object x)', documentation: 'Prints an argument and terminates the line.' },
@@ -34,16 +82,28 @@ const JAVA_SUGGESTIONS: SuggestionItem[] = [
 
   // Collections & Arrays
   { label: 'ArrayList', insertText: 'ArrayList<${1:String}> list = new ArrayList<>();', kind: 'class', detail: 'java.util.ArrayList', documentation: 'Resizable-array implementation of the List interface.' },
+  { label: 'HashMap', insertText: 'HashMap<${1:String}, ${2:Integer}> map = new HashMap<>();', kind: 'class', detail: 'java.util.HashMap', documentation: 'Hash table based implementation of the Map interface.' },
+  { label: 'HashSet', insertText: 'HashSet<${1:String}> set = new HashSet<>();', kind: 'class', detail: 'java.util.HashSet', documentation: 'Set backed by a hash table.' },
   { label: 'Arrays.toString', insertText: 'Arrays.toString($0)', kind: 'function', detail: 'String toString(Object[] a)', documentation: 'Returns a string representation of the contents of the specified array.' },
   { label: 'Arrays.sort', insertText: 'Arrays.sort($0);', kind: 'function', detail: 'void sort(Object[] a)', documentation: 'Sorts the specified array into ascending numerical/natural order.' },
   { label: 'Collections.sort', insertText: 'Collections.sort($0);', kind: 'function', detail: 'void sort(List<T> list)', documentation: 'Sorts the specified list into ascending order.' },
   { label: 'File', insertText: 'new File("$0")', kind: 'class', detail: 'java.io.File', documentation: 'An abstract representation of file and directory pathnames.' },
+
+  // Common Imports
+  { label: 'import java.util.Scanner;', insertText: 'import java.util.Scanner;\n', kind: 'module', documentation: 'Scanner utility class.' },
+  { label: 'import java.util.ArrayList;', insertText: 'import java.util.ArrayList;\n', kind: 'module', documentation: 'ArrayList collection.' },
+  { label: 'import java.util.Arrays;', insertText: 'import java.util.Arrays;\n', kind: 'module', documentation: 'Arrays utility class.' },
+  { label: 'import java.util.HashMap;', insertText: 'import java.util.HashMap;\n', kind: 'module', documentation: 'HashMap key-value collection.' },
+  { label: 'import java.util.*;', insertText: 'import java.util.*;\n', kind: 'module', documentation: 'Import all java.util utilities.' },
+  { label: 'import java.io.File;', insertText: 'import java.io.File;\n', kind: 'module', documentation: 'File I/O class.' },
+  { label: 'import java.io.*;', insertText: 'import java.io.*;\n', kind: 'module', documentation: 'Import all java.io stream and file classes.' },
 
   // Keywords
   { label: 'public static void main', insertText: 'public static void main(String[] args) {\n    $0\n}', kind: 'keyword', detail: 'Java main method', documentation: 'Entrypoint for Java application.' },
   { label: 'if', insertText: 'if ($0) {\n    \n}', kind: 'keyword' },
   { label: 'else', insertText: 'else {\n    $0\n}', kind: 'keyword' },
   { label: 'for', insertText: 'for (int i = 0; i < $1; i++) {\n    $0\n}', kind: 'keyword' },
+  { label: 'for-each', insertText: 'for (${1:Object} item : ${2:collection}) {\n    $0\n}', kind: 'keyword', documentation: 'Enhanced for-each loop.' },
   { label: 'while', insertText: 'while ($0) {\n    \n}', kind: 'keyword' },
   { label: 'switch', insertText: 'switch ($1) {\n    case $2:\n        $0\n        break;\n    default:\n        break;\n}', kind: 'keyword' },
   { label: 'try / catch', insertText: 'try {\n    $0\n} catch (Exception e) {\n    \n}', kind: 'keyword' },
@@ -186,6 +246,47 @@ const MEMBER_COMPLETIONS: Record<string, SuggestionItem[]> = {
     { label: 'max', insertText: 'max($0, )', kind: 'function', detail: 'T max(a, b)', documentation: 'Returns the greater value.' },
     { label: 'min', insertText: 'min($0, )', kind: 'function', detail: 'T min(a, b)', documentation: 'Returns the smaller value.' },
   ],
+  System: [
+    { label: 'out.println', insertText: 'out.println($0);', kind: 'function', detail: 'void println(Object x)', documentation: 'Prints to standard output with newline.' },
+    { label: 'out.print', insertText: 'out.print($0);', kind: 'function', detail: 'void print(Object x)', documentation: 'Prints to standard output without newline.' },
+    { label: 'out.printf', insertText: 'out.printf("$0\\n", );', kind: 'function', detail: 'PrintStream printf(String format, Object... args)', documentation: 'Formatted output stream.' },
+    { label: 'err.println', insertText: 'err.println($0);', kind: 'function', detail: 'void println(Object x)', documentation: 'Prints to standard error stream.' },
+    { label: 'currentTimeMillis', insertText: 'currentTimeMillis()', kind: 'function', detail: 'long currentTimeMillis()', documentation: 'Returns current time in milliseconds.' },
+    { label: 'nanoTime', insertText: 'nanoTime()', kind: 'function', detail: 'long nanoTime()', documentation: 'Returns high-resolution time stamp.' },
+    { label: 'exit', insertText: 'exit($0);', kind: 'function', detail: 'void exit(int status)', documentation: 'Terminates currently running JVM.' },
+  ],
+  out: [
+    { label: 'println', insertText: 'println($0);', kind: 'function', detail: 'void println(Object x)', documentation: 'Prints an argument and terminates the line.' },
+    { label: 'print', insertText: 'print($0);', kind: 'function', detail: 'void print(Object x)', documentation: 'Prints an argument to stdout.' },
+    { label: 'printf', insertText: 'printf("$0\\n", );', kind: 'function', detail: 'PrintStream printf(String format, Object... args)', documentation: 'Writes a formatted string to stdout.' },
+  ],
+  scanner: [
+    { label: 'nextLine', insertText: 'nextLine()', kind: 'function', detail: 'String nextLine()', documentation: 'Advances past current line and returns skipped string.' },
+    { label: 'nextInt', insertText: 'nextInt()', kind: 'function', detail: 'int nextInt()', documentation: 'Scans the next token as an int.' },
+    { label: 'nextDouble', insertText: 'nextDouble()', kind: 'function', detail: 'double nextDouble()', documentation: 'Scans the next token as a double.' },
+    { label: 'nextBoolean', insertText: 'nextBoolean()', kind: 'function', detail: 'boolean nextBoolean()', documentation: 'Scans the next token as a boolean.' },
+    { label: 'next', insertText: 'next()', kind: 'function', detail: 'String next()', documentation: 'Finds and returns the next complete token.' },
+    { label: 'hasNextLine', insertText: 'hasNextLine()', kind: 'function', detail: 'boolean hasNextLine()', documentation: 'Returns true if there is another line in the input.' },
+    { label: 'hasNextInt', insertText: 'hasNextInt()', kind: 'function', detail: 'boolean hasNextInt()', documentation: 'Returns true if the next token is a valid int.' },
+    { label: 'close', insertText: 'close();', kind: 'function', detail: 'void close()', documentation: 'Closes this scanner.' },
+  ],
+  list: [
+    { label: 'add', insertText: 'add($0);', kind: 'function', detail: 'boolean add(E e)', documentation: 'Appends the specified element to the end of this list.' },
+    { label: 'get', insertText: 'get($0)', kind: 'function', detail: 'E get(int index)', documentation: 'Returns the element at the specified position in this list.' },
+    { label: 'size', insertText: 'size()', kind: 'function', detail: 'int size()', documentation: 'Returns the number of elements in this list.' },
+    { label: 'isEmpty', insertText: 'isEmpty()', kind: 'function', detail: 'boolean isEmpty()', documentation: 'Returns true if this list contains no elements.' },
+    { label: 'contains', insertText: 'contains($0)', kind: 'function', detail: 'boolean contains(Object o)', documentation: 'Returns true if this list contains the specified element.' },
+    { label: 'remove', insertText: 'remove($0);', kind: 'function', detail: 'E remove(int index)', documentation: 'Removes the element at the specified position.' },
+    { label: 'clear', insertText: 'clear();', kind: 'function', detail: 'void clear()', documentation: 'Removes all of the elements from this list.' },
+  ],
+  map: [
+    { label: 'put', insertText: 'put($1, $2);', kind: 'function', detail: 'V put(K key, V value)', documentation: 'Associates the specified value with the specified key.' },
+    { label: 'get', insertText: 'get($0)', kind: 'function', detail: 'V get(Object key)', documentation: 'Returns the value to which the specified key is mapped.' },
+    { label: 'containsKey', insertText: 'containsKey($0)', kind: 'function', detail: 'boolean containsKey(Object key)', documentation: 'Returns true if this map contains a mapping for the specified key.' },
+    { label: 'keySet', insertText: 'keySet()', kind: 'function', detail: 'Set<K> keySet()', documentation: 'Returns a Set view of the keys contained in this map.' },
+    { label: 'values', insertText: 'values()', kind: 'function', detail: 'Collection<V> values()', documentation: 'Returns a Collection view of the values contained in this map.' },
+    { label: 'size', insertText: 'size()', kind: 'function', detail: 'int size()', documentation: 'Returns the number of key-value mappings.' },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -267,6 +368,39 @@ export function getSuggestions(
     }
 
     return { items, prefix: rawPrefix, replaceStart };
+  }
+
+  // 1c. Detect Java import package & class completion (e.g. `import java.` or `import java.util.`)
+  const javaImportMatch = textBeforeCursor.match(/^[ \t]*import\s+([A-Za-z0-9_.]*)$/m);
+  if (javaImportMatch && filePath.endsWith('.java')) {
+    const importQuery = javaImportMatch[1]; // e.g. "java." or "java.util." or "java.u"
+    const lineStart = textBeforeCursor.lastIndexOf('\n') === -1 ? 0 : textBeforeCursor.lastIndexOf('\n') + 1;
+    const indentMatch = textBeforeCursor.slice(lineStart).match(/^[ \t]*/);
+    const indent = indentMatch ? indentMatch[0] : '';
+    const replaceStart = lineStart + indent.length + 'import '.length;
+
+    const lowerQuery = importQuery.toLowerCase();
+    const matches: SuggestionItem[] = [];
+
+    for (const entry of JAVA_COMMON_IMPORTS) {
+      if (entry.path.toLowerCase().startsWith(lowerQuery) || entry.path.toLowerCase().includes(lowerQuery)) {
+        matches.push({
+          label: entry.label,
+          insertText: `${entry.label}\n`,
+          kind: 'module',
+          detail: entry.path,
+          documentation: entry.doc,
+        });
+      }
+    }
+
+    if (matches.length > 0) {
+      return {
+        items: matches.slice(0, 20),
+        prefix: importQuery,
+        replaceStart,
+      };
+    }
   }
 
   // 2. Member Access Completion: e.g. `plt.`, `turtle.`, `np.`, `std::`

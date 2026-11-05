@@ -18,9 +18,21 @@ describe('codeSuggest engine', () => {
     expect(res.items.some((i) => i.label === 'forward')).toBe(true);
   });
 
-  it('suggests dot-member completions for numpy np.', () => {
-    const res = getSuggestions('np.lin', 6, 'src/main.py');
-    expect(res.items.some((i) => i.label === 'linspace')).toBe(true);
+  it('suggests java standard library imports on import java.', () => {
+    const code = 'import java.';
+    const res = getSuggestions(code, code.length, 'src/demo/Main.java');
+    expect(res.items.some((i) => i.label === 'java.util.Scanner;')).toBe(true);
+    expect(res.items.some((i) => i.label === 'java.util.ArrayList;')).toBe(true);
+    expect(res.items.some((i) => i.label === 'java.io.File;')).toBe(true);
+    expect(res.replaceStart).toBe('import '.length);
+  });
+
+  it('suggests java methods on System. and scanner.', () => {
+    const resSys = getSuggestions('System.', 7, 'src/demo/Main.java');
+    expect(resSys.items.some((i) => i.label === 'out.println')).toBe(true);
+
+    const resScanner = getSuggestions('scanner.', 8, 'src/demo/Main.java');
+    expect(resScanner.items.some((i) => i.label === 'nextLine')).toBe(true);
   });
 
   it('suggests cross-file functions defined in other project files', () => {
