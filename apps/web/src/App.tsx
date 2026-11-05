@@ -79,8 +79,12 @@ export const App: React.FC = () => {
 
   const autoSaveRef = useRef<AutoSaveManager | null>(null);
 
-  const [shareModalUrl, setShareModalUrl] = useState<string | null>(null);
-  const [shareExceedsLimit, setShareExceedsLimit] = useState<boolean>(false);
+  const [shareModalOpen, setShareModalOpen] = useState<boolean>(false);
+  const [shareRawSnapshotHash, setShareRawSnapshotHash] = useState<string>('');
+  const [shareOptionHideNew, setShareOptionHideNew] = useState<boolean>(false);
+  const [shareOptionHighlight, setShareOptionHighlight] = useState<boolean>(true);
+  const [shareOptionSuggest, setShareOptionSuggest] = useState<boolean>(true);
+  const [shareOptionFile, setShareOptionFile] = useState<string>('');
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
 
   // Initialize storage repository & load last project or fallback to starter
@@ -286,9 +290,15 @@ export const App: React.FC = () => {
 
   const handleShareClick = () => {
     const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
-    const { url, exceedsUrlLimit } = exportProjectToUrlHash(project, origin);
-    setShareModalUrl(url);
-    setShareExceedsLimit(exceedsUrlLimit);
+    const { url } = exportProjectToUrlHash(project, origin);
+    // Extract fragment after '#p=v1.'
+    const match = url.match(/#p=v1\.([A-Za-z0-9_-]+)/);
+    setShareRawSnapshotHash(match ? match[1] : '');
+    setShareOptionHideNew(false);
+    setShareOptionHighlight(syntaxColoring);
+    setShareOptionSuggest(codeSuggest);
+    setShareOptionFile(activeFilePath);
+    setShareModalOpen(true);
     setCopiedShare(false);
   };
 
@@ -872,135 +882,239 @@ export const App: React.FC = () => {
       </div>
 
       {/* Share Snapshot Modal */}
-      {shareModalUrl && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="share-dialog-title"
-          onClick={() => setShareModalUrl(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 99999,
-            padding: '16px',
-          }}
-        >
+      {shareModalOpen && (() => {
+        const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+        const params = new URLSearchParams();
+        if (shareRawSnapshotHash) {
+          // Put p parameter
+          params.set('p', `v1.${shareRawSnapshotHash}`);
+        }
+        if (shareOptionHideNew) {
+          params.set('hideNewProject', 'true');
+        }
+        if (!shareOptionHighlight) {
+          params.set('highlight', 'off');
+        }
+        if (!shareOptionSuggest) {
+          params.set('codeSuggest', '0');
+        }
+        if (shareOptionFile && shareOptionFile !== project.entrypoint) {
+          params.set('file', shareOptionFile);
+        }
+
+        const shareUrl = `${origin}?view=project#${params.toString()}`;
+        const exceedsLimit = shareUrl.length > 8192;
+
+        return (
           <div
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
+            onClick={() => setShareModalOpen(false)}
             style={{
-              backgroundColor: '#0f172a',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              maxWidth: '560px',
-              width: '100%',
-              padding: '20px',
-              color: '#f8fafc',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.75)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '16px',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h2 id="share-dialog-title" style={{ fontSize: '1.1rem', fontWeight: 600, color: '#38bdf8', margin: 0 }}>
-                Share Project Snapshot
-              </h2>
-              <button
-                onClick={() => setShareModalUrl(null)}
-                aria-label="Close"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#94a3b8',
-                  fontSize: '1.2rem',
-                  cursor: 'pointer',
-                  padding: '2px 6px',
-                }}
-              >
-                ✕
-              </button>
-            </div>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                maxWidth: '600px',
+                width: '100%',
+                padding: '20px',
+                color: '#f8fafc',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h2 id="share-dialog-title" style={{ fontSize: '1.1rem', fontWeight: 600, color: '#38bdf8', margin: 0 }}>
+                  Share Project & Configure Link
+                </h2>
+                <button
+                  onClick={() => setShareModalOpen(false)}
+                  aria-label="Close"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: '1.2rem',
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '12px', lineHeight: 1.5 }}>
-              This portable URL encodes an immutable compressed snapshot of your files and starter code. Opening this link allows anyone to import this project into their local workspace.
-            </p>
+              <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '16px', lineHeight: 1.5 }}>
+                Configure environment options for your students or embed, then copy the portable snapshot URL.
+              </p>
 
-            {shareExceedsLimit && (
+              {/* URL Options & Toggles */}
               <div
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid #ef4444',
+                  backgroundColor: '#090d16',
+                  border: '1px solid #1e293b',
                   borderRadius: '6px',
-                  padding: '8px 12px',
-                  fontSize: '0.8rem',
-                  color: '#fca5a5',
-                  marginBottom: '12px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
                 }}
               >
-                ⚠️ URL length exceeds the 8 KiB browser limit. Consider reducing project file sizes or number of assets.
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>
+                  STUDENT ENVIRONMENT OPTIONS
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={shareOptionHideNew}
+                    onChange={(e) => setShareOptionHideNew(e.target.checked)}
+                    style={{ accentColor: '#38bdf8', cursor: 'pointer' }}
+                  />
+                  <span>
+                    <strong>Lock Project:</strong> Hide "+ New Project" button (keep student focused on this lab)
+                  </span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!shareOptionSuggest}
+                    onChange={(e) => setShareOptionSuggest(!e.target.checked)}
+                    style={{ accentColor: '#38bdf8', cursor: 'pointer' }}
+                  />
+                  <span>
+                    <strong>Exam Mode (Suggestions):</strong> Disable autocomplete & standard library suggestions
+                  </span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!shareOptionHighlight}
+                    onChange={(e) => setShareOptionHighlight(!e.target.checked)}
+                    style={{ accentColor: '#38bdf8', cursor: 'pointer' }}
+                  />
+                  <span>
+                    <strong>Exam Mode (Coloring):</strong> Disable editor syntax highlighting
+                  </span>
+                </label>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                  <label htmlFor="share-initial-file" style={{ fontSize: '0.825rem', color: '#cbd5e1' }}>
+                    Initial Active File:
+                  </label>
+                  <select
+                    id="share-initial-file"
+                    value={shareOptionFile}
+                    onChange={(e) => setShareOptionFile(e.target.value)}
+                    style={{
+                      backgroundColor: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #475569',
+                      borderRadius: '4px',
+                      padding: '3px 8px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {project.files.map((f) => (
+                      <option key={f.path} value={f.path}>
+                        {f.path}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            )}
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <input
-                readOnly
-                value={shareModalUrl}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#020617',
-                  border: '1px solid #334155',
-                  borderRadius: '4px',
-                  padding: '8px 10px',
-                  color: '#e2e8f0',
-                  fontSize: '0.8rem',
-                  fontFamily: 'monospace',
-                  outline: 'none',
-                }}
-                onFocus={(e) => e.target.select()}
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(shareModalUrl);
-                  setCopiedShare(true);
-                  setTimeout(() => setCopiedShare(false), 2500);
-                }}
-                style={{
-                  backgroundColor: copiedShare ? '#16a34a' : '#0284c7',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '0 16px',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'background-color 0.15s ease',
-                }}
-              >
-                {copiedShare ? 'Copied!' : 'Copy Link'}
-              </button>
-            </div>
+              {exceedsLimit && (
+                <div
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    color: '#fca5a5',
+                    marginBottom: '12px',
+                  }}
+                >
+                  ⚠️ URL length ({shareUrl.length} bytes) exceeds the 8 KiB browser limit.
+                </div>
+              )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShareModalUrl(null)}
-                style={{
-                  backgroundColor: '#1e293b',
-                  color: '#cbd5e1',
-                  border: '1px solid #475569',
-                  borderRadius: '4px',
-                  padding: '6px 16px',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                }}
-              >
-                Done
-              </button>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <input
+                  readOnly
+                  value={shareUrl}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#020617',
+                    border: '1px solid #334155',
+                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    color: '#e2e8f0',
+                    fontSize: '0.8rem',
+                    fontFamily: 'monospace',
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareUrl);
+                    setCopiedShare(true);
+                    setTimeout(() => setCopiedShare(false), 2500);
+                  }}
+                  style={{
+                    backgroundColor: copiedShare ? '#16a34a' : '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '0 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                >
+                  {copiedShare ? 'Copied!' : 'Copy Link'}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShareModalOpen(false)}
+                  style={{
+                    backgroundColor: '#1e293b',
+                    color: '#cbd5e1',
+                    border: '1px solid #475569',
+                    borderRadius: '4px',
+                    padding: '6px 16px',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
