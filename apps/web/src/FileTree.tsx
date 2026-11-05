@@ -395,6 +395,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <div
               role="button"
               tabIndex={0}
+              aria-label={`Folder ${child.name}`}
+              aria-expanded={!isCollapsed}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleFolder(child.path);
+                }
+              }}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', child.path);
@@ -465,6 +473,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
           key={child.path}
           role="button"
           tabIndex={0}
+          aria-label={`File ${child.name}${isActive ? ' (active)' : ''}`}
+          aria-current={isActive ? 'true' : undefined}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectFile(child.path);
+            }
+          }}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', child.path);

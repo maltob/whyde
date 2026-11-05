@@ -13,7 +13,7 @@ html, body, #root {
   color: #f8fafc;
 }
 
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex="0"]:focus-visible {
   outline: 2px solid #38bdf8;
   outline-offset: 1px;
 }

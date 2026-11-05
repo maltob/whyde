@@ -412,6 +412,8 @@ export const Editor: React.FC<EditorProps> = ({
         <textarea
           ref={textareaRef}
           aria-label="Source Code"
+          aria-autocomplete={activeSuggest ? 'list' : 'none'}
+          aria-expanded={suggestions.length > 0}
           value={content}
           onChange={(e) => {
             onChange(e.target.value);
@@ -451,6 +453,8 @@ export const Editor: React.FC<EditorProps> = ({
         {/* Code Suggestions Popup */}
         {suggestions.length > 0 && dropdownPos && (
           <div
+            role="listbox"
+            aria-label="Code Suggestions"
             style={{
               position: 'absolute',
               top: `${dropdownPos.top}px`,
@@ -471,6 +475,8 @@ export const Editor: React.FC<EditorProps> = ({
             {suggestions.map((item, idx) => (
               <div
                 key={item.label + idx}
+                role="option"
+                aria-selected={idx === selectedIndex}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   applySuggestion(item);
