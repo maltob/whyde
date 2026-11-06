@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const LanguageIdSchema = z.enum(['python', 'java', 'cpp']);
+export const LanguageIdSchema = z.enum(['python', 'java', 'cpp', 'javascript']);
 export type LanguageId = z.infer<typeof LanguageIdSchema>;
 
 export const ProjectFileSchema = z.object({

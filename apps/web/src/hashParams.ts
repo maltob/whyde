@@ -2,7 +2,7 @@
  * Parses URL hash parameters (e.g. #lang=cpp&blank=true&hideNewProject=true&highlight=off&file=src/main.cpp)
  */
 export interface UrlHashOptions {
-  lang?: 'python' | 'cpp' | 'java';
+  lang?: 'python' | 'cpp' | 'java' | 'javascript';
   blank?: boolean;
   highlight?: boolean;
   file?: string;
@@ -24,6 +24,8 @@ export function parseHashString(hash: string): UrlHashOptions {
     result.lang = 'cpp';
   } else if (lang === 'java') {
     result.lang = 'java';
+  } else if (lang === 'javascript' || lang === 'js') {
+    result.lang = 'javascript';
   }
 
   const blank = params.get('blank') || params.get('empty');

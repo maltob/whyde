@@ -1,6 +1,6 @@
 # WhyDE (Browser IDE)
 
-**WhyDE** is a fast, completely serverless in-browser coding environment and Progressive Web App (PWA). It runs **Python**, **C++**, and **Java** code 100% locally inside the web browser using WebAssembly.
+**WhyDE** is a fast, completely serverless in-browser coding environment and Progressive Web App (PWA). It runs **Python**, **JavaScript**, **C++**, and **Java** code 100% locally inside the web browser.
 
 No backend servers to set up, no Docker containers to maintain, no data being sent to a third party.
 
@@ -23,7 +23,7 @@ WhyDE provides a clean, familiar coding workspace:
 ## How Do I Use It?
 
 ### 1. As a Student or tester
-1. **Choose a language**: Select Python, C++, or Java from the top navigation bar.
+1. **Choose a language**: Select Python, JavaScript, C++, or Java from the top navigation bar.
 2. **Write or drop in your files**: Click `+ New File`, or drag and drop code files from your desktop straight into the file explorer.
 3. **Click Run**: Watch your code compile and execute instantly with non-blocking WebAssembly. If your code asks for input (e.g. `name = input("What is your name? ")`), simply type into the integrated terminal.
 4. **Work offline**: WhyDE installs as a PWA and caches all files locally in your browser's IndexedDB. Your work is saved automatically as you type.
@@ -45,7 +45,7 @@ Configure any student session by appending hash parameters to your URL (e.g. `ht
 
 | URL Parameter | Options | Description | Common Use Case |
 | :--- | :--- | :--- | :--- |
-| `lang` | `python`, `cpp`, `java` | Pre-selects the project language on launch. | Linking directly to a Python or Java lab. |
+| `lang` | `python`, `javascript`, `cpp`, `java` | Pre-selects the project language on launch. | Linking directly to a Python, JS, or Java lab. |
 | `file` | Path (e.g. `src/main.cpp`) | Sets which file is open and focused in the editor. | Directing attention to the starter file. |
 | `blank` | `true`, `1` | Opens with an empty file instead of template code. | Scratchpads, quizzes, and homework. |
 | `hideNewProject`| `true`, `1` | Hides the "+ New Project" button in the navigation bar. | Keeping students focused on the active lab. |

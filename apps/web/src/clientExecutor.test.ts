@@ -131,5 +131,89 @@ public class Main {
       const res = executeClientSideCode('java', javaCode);
       expect(res.stdout).toContain('Hello from Java!');
     });
+
+    it('executes in-browser JavaScript with console.log, array mapping, and prompt input', () => {
+      const jsCode = `
+const numbers = [1, 2, 3, 4];
+const doubled = numbers.map(x => x * 2);
+console.log("Doubled:", doubled.join(", "));
+
+const name = prompt("Enter your name: ");
+console.log("Hello, " + name + "!");
+`;
+      // Step 1: initial run requires stdin
+      const step1 = executeClientSideCode('javascript', jsCode);
+      expect(step1.stdout).toContain('Doubled: 2, 4, 6, 8');
+      expect(step1.requiresStdin).toBeDefined();
+      expect(step1.requiresStdin?.prompt).toBe('Enter your name: ');
+
+      // Step 2: run with supplied input
+      const step2 = executeClientSideCode('javascript', jsCode, 'Grace Hopper');
+      expect(step2.exitCode).toBe(0);
+      expect(step2.stdout).toContain('Hello, Grace Hopper!');
+    });
+
+    it('prevents user JavaScript from accessing window, document, location, or redirecting', () => {
+      const hostileCode = `
+try {
+  window.location.href = "https://evil.com";
+} catch (e) {
+  console.log("Blocked window redirect:", e.name);
+}
+
+try {
+  document.body.innerHTML = "hacked";
+} catch (e) {
+  console.log("Blocked document edit:", e.name);
+}
+
+try {
+  location.replace("https://evil.com");
+} catch (e) {
+  console.log("Blocked location redirect:", e.name);
+}
+`;
+      const res = executeClientSideCode('javascript', hostileCode);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Blocked window redirect: TypeError');
+      expect(res.stdout).toContain('Blocked document edit: TypeError');
+      expect(res.stdout).toContain('Blocked location redirect: TypeError');
+    });
+
+    it('supports Node.js core modules: fs, path, and assert in-memory', () => {
+      const nodeCode = `
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert');
+
+// 1. Assert checks
+assert.strictEqual(2 + 2, 4);
+assert.ok(true);
+assert.deepStrictEqual({ a: 1 }, { a: 1 });
+
+// 2. Path checks
+const fullPath = path.join('src', 'sub', 'test.txt');
+assert.strictEqual(path.basename(fullPath), 'test.txt');
+assert.strictEqual(path.extname(fullPath), '.txt');
+
+// 3. Virtual fs read & write
+const scores = fs.readFileSync('data/scores.csv', 'utf8');
+console.log("Read scores:", scores.trim());
+
+fs.writeFileSync('output.txt', 'Computed Result: 100');
+const output = fs.readFileSync('output.txt', 'utf8');
+console.log("Written output:", output);
+`;
+      const allFiles = [
+        { path: 'src/main.js', content: nodeCode },
+        { path: 'data/scores.csv', content: 'Alice,95\nBob,88\n' },
+      ];
+
+      const res = executeClientSideCode('javascript', nodeCode, undefined, allFiles);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Read scores: Alice,95\nBob,88');
+      expect(res.stdout).toContain('Written output: Computed Result: 100');
+      expect(allFiles.some((f) => f.path === 'output.txt' && f.content === 'Computed Result: 100')).toBe(true);
+    });
   });
 });

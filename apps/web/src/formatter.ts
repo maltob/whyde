@@ -8,7 +8,7 @@ export function formatCode(code: string, filePath: string): string {
 
   if (ext === 'py') {
     return formatPython(code);
-  } else if (ext === 'cpp' || ext === 'hpp' || ext === 'h' || ext === 'cc' || ext === 'java' || ext === 'json') {
+  } else if (ext === 'js' || ext === 'mjs' || ext === 'cjs' || ext === 'cpp' || ext === 'hpp' || ext === 'h' || ext === 'cc' || ext === 'java' || ext === 'json') {
     const fn = (beautify as any).js || beautify;
     return fn(code, {
       indent_size: 4,

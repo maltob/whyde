@@ -102,6 +102,30 @@ function getFileIcon(name: string, isActive: boolean) {
           Py
         </span>
       );
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            fontSize: '9px',
+            fontWeight: 800,
+            borderRadius: '3px',
+            backgroundColor: '#facc15',
+            color: '#090d16',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="JavaScript"
+        >
+          JS
+        </span>
+      );
     case 'cpp':
     case 'cc':
     case 'cxx':

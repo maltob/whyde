@@ -464,6 +464,26 @@ export function getSuggestions(
     baseSuggestions = CPP_SUGGESTIONS;
   } else if (ext === 'py') {
     baseSuggestions = PYTHON_SUGGESTIONS;
+  } else if (ext === 'js' || ext === 'mjs' || ext === 'cjs') {
+    baseSuggestions = [
+      { label: 'console.log', insertText: 'console.log();', kind: 'function', documentation: 'Outputs a message to the console.' },
+      { label: 'console.error', insertText: 'console.error();', kind: 'function', documentation: 'Outputs an error message to the console.' },
+      { label: 'function', insertText: 'function name(params) {\n    \n}', kind: 'keyword', documentation: 'Declares a function.' },
+      { label: 'const', insertText: 'const name = value;', kind: 'keyword', documentation: 'Declares a block-scoped constant.' },
+      { label: 'let', insertText: 'let name = value;', kind: 'keyword', documentation: 'Declares a block-scoped local variable.' },
+      { label: 'for', insertText: 'for (let i = 0; i < length; i++) {\n    \n}', kind: 'keyword', documentation: 'Standard for loop.' },
+      { label: 'for-of', insertText: 'for (const item of iterable) {\n    \n}', kind: 'keyword', documentation: 'Iterates over values of an iterable.' },
+      { label: 'if', insertText: 'if (condition) {\n    \n}', kind: 'keyword', documentation: 'Conditional branching statement.' },
+      { label: 'if-else', insertText: 'if (condition) {\n    \n} else {\n    \n}', kind: 'keyword', documentation: 'If-else conditional branching.' },
+      { label: 'async function', insertText: 'async function name() {\n    \n}', kind: 'keyword', documentation: 'Declares an asynchronous function.' },
+      { label: 'Promise', insertText: 'new Promise((resolve, reject) => {\n    \n})', kind: 'class', documentation: 'Promise represents eventual completion of an async operation.' },
+      { label: 'JSON.stringify', insertText: 'JSON.stringify()', kind: 'function', documentation: 'Converts JavaScript value to JSON string.' },
+      { label: 'JSON.parse', insertText: 'JSON.parse()', kind: 'function', documentation: 'Parses a JSON string.' },
+      { label: 'Math.floor', insertText: 'Math.floor()', kind: 'function', documentation: 'Returns largest integer less than or equal to number.' },
+      { label: 'Math.round', insertText: 'Math.round()', kind: 'function', documentation: 'Rounds number to nearest integer.' },
+      { label: 'Math.max', insertText: 'Math.max()', kind: 'function', documentation: 'Returns largest of zero or more numbers.' },
+      { label: 'Math.min', insertText: 'Math.min()', kind: 'function', documentation: 'Returns lowest of zero or more numbers.' },
+    ];
   }
 
   // 4. Extract symbols & functions declared in the current file AND other project files

@@ -302,7 +302,7 @@ export const App: React.FC = () => {
     setCopiedShare(false);
   };
 
-  const handleNewProject = async (lang: 'python' | 'java' | 'cpp', blank: boolean = false) => {
+  const handleNewProject = async (lang: 'python' | 'java' | 'cpp' | 'javascript', blank: boolean = false) => {
     const newProj = blank ? BLANK_PROJECTS[lang]() : STARTER_PROJECTS[lang]();
     setProject(newProj);
     setActiveFilePath(newProj.entrypoint);

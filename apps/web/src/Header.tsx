@@ -10,7 +10,7 @@ interface HeaderProps {
   hideNewProject?: boolean;
   onRun: () => void;
   onStop: () => void;
-  onNewProject: (lang: 'python' | 'java' | 'cpp', blank?: boolean) => void;
+  onNewProject: (lang: 'python' | 'java' | 'cpp' | 'javascript', blank?: boolean) => void;
   onShare?: () => void;
 }
 
@@ -110,10 +110,10 @@ export const Header: React.FC<HeaderProps> = ({
               if (e.target.value) {
                 const val = e.target.value;
                 if (val.endsWith('-blank')) {
-                  const lang = val.replace('-blank', '') as 'python' | 'java' | 'cpp';
+                  const lang = val.replace('-blank', '') as 'python' | 'java' | 'cpp' | 'javascript';
                   onNewProject(lang, true);
                 } else {
-                  onNewProject(val as 'python' | 'java' | 'cpp', false);
+                  onNewProject(val as 'python' | 'java' | 'cpp' | 'javascript', false);
                 }
                 e.target.value = '';
               }
@@ -134,11 +134,13 @@ export const Header: React.FC<HeaderProps> = ({
             </option>
             <optgroup label="Starter Demos">
               <option value="python">Python 3.14 (Starter)</option>
+              <option value="javascript">JavaScript (Starter)</option>
               <option value="java">Java 11+ (Starter)</option>
               <option value="cpp">C++17+ (Starter)</option>
             </optgroup>
             <optgroup label="Blank / Student Templates">
               <option value="python-blank">Python (Blank)</option>
+              <option value="javascript-blank">JavaScript (Blank)</option>
               <option value="java-blank">Java (Blank)</option>
               <option value="cpp-blank">C++ (Blank)</option>
             </optgroup>

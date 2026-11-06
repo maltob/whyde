@@ -1,6 +1,41 @@
 import { Project } from '@ide/project-model';
 
-export const STARTER_PROJECTS: Record<'python' | 'java' | 'cpp', () => Project> = {
+export const STARTER_PROJECTS: Record<'python' | 'java' | 'cpp' | 'javascript', () => Project> = {
+  javascript: () => ({
+    schemaVersion: 1,
+    kind: 'browser-ide-project',
+    id: `proj-js-${Date.now()}`,
+    name: 'JavaScript Starter',
+    language: 'javascript',
+    entrypoint: 'src/main.js',
+    files: [
+      {
+        path: 'src/main.js',
+        encoding: 'utf-8',
+        content: `// Modern JavaScript (ES2024+) Starter
+function main() {
+    console.log("Hello from in-browser JavaScript!");
+    
+    const items = [10, 20, 30, 40, 50];
+    const squared = items.map(x => x * x);
+    console.log("Squared numbers:", squared);
+    
+    const sum = squared.reduce((acc, curr) => acc + curr, 0);
+    console.log("Total sum:", sum);
+}
+
+main();
+`,
+      },
+    ],
+    toolchain: {
+      runtimeId: 'javascript-native',
+      requestedVersion: 'ES2024',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }),
+
   python: () => ({
     schemaVersion: 1,
     kind: 'browser-ide-project',
@@ -137,7 +172,29 @@ void greet() {
   }),
 };
 
-export const BLANK_PROJECTS: Record<'python' | 'java' | 'cpp', () => Project> = {
+export const BLANK_PROJECTS: Record<'python' | 'java' | 'cpp' | 'javascript', () => Project> = {
+  javascript: () => ({
+    schemaVersion: 1,
+    kind: 'browser-ide-project',
+    id: `proj-js-blank-${Date.now()}`,
+    name: 'JavaScript (Blank)',
+    language: 'javascript',
+    entrypoint: 'src/main.js',
+    files: [
+      {
+        path: 'src/main.js',
+        encoding: 'utf-8',
+        content: `// Write your JavaScript solution here\n`,
+      },
+    ],
+    toolchain: {
+      runtimeId: 'javascript-native',
+      requestedVersion: 'ES2024',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }),
+
   python: () => ({
     schemaVersion: 1,
     kind: 'browser-ide-project',

@@ -1,4 +1,4 @@
-export type LanguageId = 'python' | 'java' | 'cpp';
+export type LanguageId = 'python' | 'java' | 'cpp' | 'javascript';
 
 export type RuntimeStatus =
   | 'not-installed'
