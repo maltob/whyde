@@ -645,4 +645,62 @@ public class Main {
     expect(res.stdout).toContain('Count A: 2');
     expect(res.stdout).toContain('Upper first: ALICE');
   });
+
+  it('supports Java GUI & 2D Graphics Canvas emulation with AWT Color, Font, and Princeton StdDraw', async () => {
+    const graphicsCode = `
+package demo;
+
+import java.awt.Color;
+import java.awt.Font;
+
+public class Main {
+    public static void main(String[] args) {
+        // 1. Color and Font support
+        Color red = Color.RED;
+        System.out.println("Red R: " + red.getRed() + ", G: " + red.getGreen() + ", B: " + red.getBlue());
+
+        Font boldFont = new Font("Arial", Font.BOLD, 18);
+        System.out.println("Font name: " + boldFont.name + ", size: " + boldFont.size);
+
+        // 2. Princeton StdDraw canvas primitives
+        StdDraw.setCanvasSize(400, 400);
+        StdDraw.setScale(0, 100);
+        StdDraw.setPenColor(Color.BLUE);
+        StdDraw.filledSquare(50, 50, 25);
+        StdDraw.setPenColor(Color.YELLOW);
+        StdDraw.filledCircle(50, 50, 15);
+        StdDraw.setPenColor(Color.WHITE);
+        StdDraw.text(50, 50, "Java GUI");
+        StdDraw.show();
+
+        System.out.println("StdDraw rendered successfully!");
+    }
+}
+`;
+
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'java-graphics-demo',
+      name: 'Java Graphics Demo',
+      language: 'java',
+      entrypoint: 'src/demo/Main.java',
+      files: [{ path: 'src/demo/Main.java', encoding: 'utf-8', content: graphicsCode }],
+      toolchain: { runtimeId: 'java-oss', requestedVersion: '11.0.22' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    let plotEmitted: string | null = null;
+    const res = await compileAndRunJava(project, {
+      onPlot: (url) => {
+        plotEmitted = url;
+      },
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('Red R: 255, G: 0, B: 0');
+    expect(res.stdout).toContain('Font name: Arial, size: 18');
+    expect(res.stdout).toContain('StdDraw rendered successfully!');
+    // In Node test environment document is undefined, but StdDraw.show() completes gracefully
+  });
 });

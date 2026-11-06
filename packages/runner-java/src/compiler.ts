@@ -6,6 +6,7 @@ export interface JavaCompileAndRunOptions {
   requestStdin?: (prompt: string) => Promise<string>;
   onStdout?: (text: string) => void;
   onStderr?: (text: string) => void;
+  onPlot?: (dataUrl: string) => void;
   onEvent?: (event: RuntimeEvent) => void;
 }
 
@@ -478,6 +479,347 @@ const createJavaRandom = (seed?: number) => ({
   nextLong: () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER),
 });
 
+// ---------------------------------------------------------------------------
+// Java AWT & 2D Graphics Canvas Emulation
+// ---------------------------------------------------------------------------
+class JavaColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+
+  static readonly BLACK = new JavaColor(0, 0, 0);
+  static readonly WHITE = new JavaColor(255, 255, 255);
+  static readonly RED = new JavaColor(255, 0, 0);
+  static readonly GREEN = new JavaColor(0, 255, 0);
+  static readonly BLUE = new JavaColor(0, 0, 255);
+  static readonly YELLOW = new JavaColor(255, 255, 0);
+  static readonly CYAN = new JavaColor(0, 255, 255);
+  static readonly MAGENTA = new JavaColor(255, 0, 255);
+  static readonly ORANGE = new JavaColor(255, 200, 0);
+  static readonly PINK = new JavaColor(255, 175, 175);
+  static readonly GRAY = new JavaColor(128, 128, 128);
+  static readonly DARK_GRAY = new JavaColor(64, 64, 64);
+  static readonly LIGHT_GRAY = new JavaColor(192, 192, 192);
+
+  // Lowercase alias compatibility (Color.black, Color.red, etc.)
+  static readonly black = JavaColor.BLACK;
+  static readonly white = JavaColor.WHITE;
+  static readonly red = JavaColor.RED;
+  static readonly green = JavaColor.GREEN;
+  static readonly blue = JavaColor.BLUE;
+  static readonly yellow = JavaColor.YELLOW;
+  static readonly cyan = JavaColor.CYAN;
+  static readonly magenta = JavaColor.MAGENTA;
+  static readonly orange = JavaColor.ORANGE;
+  static readonly pink = JavaColor.PINK;
+  static readonly gray = JavaColor.GRAY;
+  static readonly darkGray = JavaColor.DARK_GRAY;
+  static readonly lightGray = JavaColor.LIGHT_GRAY;
+
+  constructor(r: number | string, g?: number, b?: number, a: number = 255) {
+    if (typeof r === 'string') {
+      const parsed = parseInt(r.replace('#', ''), 16);
+      this.r = (parsed >> 16) & 255;
+      this.g = (parsed >> 8) & 255;
+      this.b = parsed & 255;
+      this.a = 255;
+    } else if (g === undefined) {
+      const rgb = r;
+      this.r = (rgb >> 16) & 255;
+      this.g = (rgb >> 8) & 255;
+      this.b = rgb & 255;
+      this.a = 255;
+    } else {
+      this.r = r;
+      this.g = g;
+      this.b = b ?? 0;
+      this.a = a;
+    }
+  }
+
+  getRed(): number { return this.r; }
+  getGreen(): number { return this.g; }
+  getBlue(): number { return this.b; }
+  getAlpha(): number { return this.a; }
+
+  toRgbaString(): string {
+    if (this.a < 255) {
+      return `rgba(${this.r}, ${this.g}, ${this.b}, ${(this.a / 255).toFixed(3)})`;
+    }
+    return `rgb(${this.r}, ${this.g}, ${this.b})`;
+  }
+}
+
+class JavaFont {
+  static readonly PLAIN = 0;
+  static readonly BOLD = 1;
+  static readonly ITALIC = 2;
+
+  name: string;
+  style: number;
+  size: number;
+
+  constructor(name: string = 'SansSerif', style: number = 0, size: number = 12) {
+    this.name = name;
+    this.style = style;
+    this.size = size;
+  }
+
+  toCssFont(): string {
+    const stylePrefix = this.style === JavaFont.ITALIC ? 'italic ' : this.style === JavaFont.BOLD ? 'bold ' : '';
+    return `${stylePrefix}${this.size}px ${this.name}, sans-serif`;
+  }
+}
+
+class JavaGraphics {
+  private canvas: any;
+  private ctx: any;
+  private currentColor: JavaColor = JavaColor.BLACK;
+  private currentFont: JavaFont = new JavaFont();
+  private onFlush?: (dataUrl: string) => void;
+
+  constructor(width = 600, height = 400, onFlush?: (dataUrl: string) => void) {
+    this.onFlush = onFlush;
+    if (typeof document !== 'undefined') {
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = width;
+      this.canvas.height = height;
+      this.ctx = this.canvas.getContext('2d');
+      if (this.ctx) {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, width, height);
+        this.ctx.fillStyle = '#000000';
+        this.ctx.strokeStyle = '#000000';
+      }
+    }
+  }
+
+  setColor(c: any): void {
+    if (c instanceof JavaColor) {
+      this.currentColor = c;
+    } else if (typeof c === 'string') {
+      this.currentColor = new JavaColor(c);
+    }
+    if (this.ctx) {
+      const colorStr = this.currentColor.toRgbaString();
+      this.ctx.fillStyle = colorStr;
+      this.ctx.strokeStyle = colorStr;
+    }
+  }
+
+  getColor(): JavaColor {
+    return this.currentColor;
+  }
+
+  setFont(font: any): void {
+    if (font instanceof JavaFont) {
+      this.currentFont = font;
+    }
+    if (this.ctx) {
+      this.ctx.font = this.currentFont.toCssFont();
+    }
+  }
+
+  getFont(): JavaFont {
+    return this.currentFont;
+  }
+
+  drawLine(x1: number, y1: number, x2: number, y2: number): void {
+    if (!this.ctx) return;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x1, y1);
+    this.ctx.lineTo(x2, y2);
+    this.ctx.stroke();
+  }
+
+  drawRect(x: number, y: number, width: number, height: number): void {
+    if (!this.ctx) return;
+    this.ctx.strokeRect(x, y, width, height);
+  }
+
+  fillRect(x: number, y: number, width: number, height: number): void {
+    if (!this.ctx) return;
+    this.ctx.fillRect(x, y, width, height);
+  }
+
+  clearRect(x: number, y: number, width: number, height: number): void {
+    if (!this.ctx) return;
+    this.ctx.clearRect(x, y, width, height);
+  }
+
+  drawOval(x: number, y: number, width: number, height: number): void {
+    if (!this.ctx) return;
+    this.ctx.beginPath();
+    this.ctx.ellipse(x + width / 2, y + height / 2, Math.abs(width / 2), Math.abs(height / 2), 0, 0, 2 * Math.PI);
+    this.ctx.stroke();
+  }
+
+  fillOval(x: number, y: number, width: number, height: number): void {
+    if (!this.ctx) return;
+    this.ctx.beginPath();
+    this.ctx.ellipse(x + width / 2, y + height / 2, Math.abs(width / 2), Math.abs(height / 2), 0, 0, 2 * Math.PI);
+    this.ctx.fill();
+  }
+
+  drawRoundRect(x: number, y: number, width: number, height: number, arcWidth: number, arcHeight: number): void {
+    if (!this.ctx) return;
+    const radius = Math.min(arcWidth, arcHeight) / 2;
+    this.ctx.beginPath();
+    this.ctx.roundRect ? this.ctx.roundRect(x, y, width, height, radius) : this.ctx.rect(x, y, width, height);
+    this.ctx.stroke();
+  }
+
+  fillRoundRect(x: number, y: number, width: number, height: number, arcWidth: number, arcHeight: number): void {
+    if (!this.ctx) return;
+    const radius = Math.min(arcWidth, arcHeight) / 2;
+    this.ctx.beginPath();
+    this.ctx.roundRect ? this.ctx.roundRect(x, y, width, height, radius) : this.ctx.rect(x, y, width, height);
+    this.ctx.fill();
+  }
+
+  drawString(str: string, x: number, y: number): void {
+    if (!this.ctx) return;
+    this.ctx.fillText(String(str), x, y);
+  }
+
+  flush(): void {
+    if (this.canvas && this.onFlush) {
+      try {
+        const dataUrl = this.canvas.toDataURL('image/png');
+        this.onFlush(dataUrl);
+      } catch {}
+    }
+  }
+
+  toDataURL(): string {
+    return this.canvas ? this.canvas.toDataURL('image/png') : '';
+  }
+}
+
+// Princeton Algorithms / COS126 StdDraw Emulation
+function createStdDraw(onFlush?: (dataUrl: string) => void) {
+  let width = 512;
+  let height = 512;
+  let xmin = 0.0;
+  let xmax = 1.0;
+  let ymin = 0.0;
+  let ymax = 1.0;
+  let penRadius = 0.002;
+  let penColor = JavaColor.BLACK;
+  let font = new JavaFont('SansSerif', JavaFont.PLAIN, 16);
+
+  let g = new JavaGraphics(width, height, onFlush);
+
+  const scaleX = (x: number) => ((x - xmin) / (xmax - xmin)) * width;
+  const scaleY = (y: number) => height - ((y - ymin) / (ymax - ymin)) * height;
+  const factorX = (w: number) => (w / (xmax - xmin)) * width;
+  const factorY = (h: number) => (h / (ymax - ymin)) * height;
+
+  return {
+    setCanvasSize: (w: number = 512, h: number = 512) => {
+      width = w;
+      height = h;
+      g = new JavaGraphics(width, height, onFlush);
+      g.setColor(penColor);
+    },
+    setXscale: (min = 0.0, max = 1.0) => { xmin = min; xmax = max; },
+    setYscale: (min = 0.0, max = 1.0) => { ymin = min; ymax = max; },
+    setScale: (min = 0.0, max = 1.0) => { xmin = min; xmax = max; ymin = min; ymax = max; },
+    setPenRadius: (r: number = 0.002) => { penRadius = r; },
+    setPenColor: (c: any = JavaColor.BLACK) => {
+      penColor = c instanceof JavaColor ? c : new JavaColor(c);
+      g.setColor(penColor);
+    },
+    setFont: (f: any) => {
+      font = f instanceof JavaFont ? f : font;
+      g.setFont(font);
+    },
+    clear: (color: any = JavaColor.WHITE) => {
+      const c = color instanceof JavaColor ? color : new JavaColor(color);
+      g.setColor(c);
+      g.fillRect(0, 0, width, height);
+      g.setColor(penColor);
+    },
+    line: (x0: number, y0: number, x1: number, y1: number) => {
+      g.drawLine(scaleX(x0), scaleY(y0), scaleX(x1), scaleY(y1));
+    },
+    point: (x: number, y: number) => {
+      const r = Math.max(1, penRadius * width);
+      g.fillOval(scaleX(x) - r, scaleY(y) - r, 2 * r, 2 * r);
+    },
+    circle: (x: number, y: number, radius: number) => {
+      const rx = factorX(radius);
+      const ry = factorY(radius);
+      g.drawOval(scaleX(x) - rx, scaleY(y) - ry, 2 * rx, 2 * ry);
+    },
+    filledCircle: (x: number, y: number, radius: number) => {
+      const rx = factorX(radius);
+      const ry = factorY(radius);
+      g.fillOval(scaleX(x) - rx, scaleY(y) - ry, 2 * rx, 2 * ry);
+    },
+    ellipse: (x: number, y: number, semiMajorAxis: number, semiMinorAxis: number) => {
+      const rx = factorX(semiMajorAxis);
+      const ry = factorY(semiMinorAxis);
+      g.drawOval(scaleX(x) - rx, scaleY(y) - ry, 2 * rx, 2 * ry);
+    },
+    filledEllipse: (x: number, y: number, semiMajorAxis: number, semiMinorAxis: number) => {
+      const rx = factorX(semiMajorAxis);
+      const ry = factorY(semiMinorAxis);
+      g.fillOval(scaleX(x) - rx, scaleY(y) - ry, 2 * rx, 2 * ry);
+    },
+    square: (x: number, y: number, halfLength: number) => {
+      const xs = scaleX(x - halfLength);
+      const ys = scaleY(y + halfLength);
+      const ws = factorX(2 * halfLength);
+      const hs = factorY(2 * halfLength);
+      g.drawRect(xs, ys, ws, hs);
+    },
+    filledSquare: (x: number, y: number, halfLength: number) => {
+      const xs = scaleX(x - halfLength);
+      const ys = scaleY(y + halfLength);
+      const ws = factorX(2 * halfLength);
+      const hs = factorY(2 * halfLength);
+      g.fillRect(xs, ys, ws, hs);
+    },
+    rectangle: (x: number, y: number, halfWidth: number, halfHeight: number) => {
+      const xs = scaleX(x - halfWidth);
+      const ys = scaleY(y + halfHeight);
+      const ws = factorX(2 * halfWidth);
+      const hs = factorY(2 * halfHeight);
+      g.drawRect(xs, ys, ws, hs);
+    },
+    filledRectangle: (x: number, y: number, halfWidth: number, halfHeight: number) => {
+      const xs = scaleX(x - halfWidth);
+      const ys = scaleY(y + halfHeight);
+      const ws = factorX(2 * halfWidth);
+      const hs = factorY(2 * halfHeight);
+      g.fillRect(xs, ys, ws, hs);
+    },
+    text: (x: number, y: number, s: string) => {
+      g.drawString(s, scaleX(x), scaleY(y));
+    },
+    show: () => {
+      g.flush();
+    },
+    // Constants matching Princeton StdDraw
+    BLACK: JavaColor.BLACK,
+    WHITE: JavaColor.WHITE,
+    RED: JavaColor.RED,
+    GREEN: JavaColor.GREEN,
+    BLUE: JavaColor.BLUE,
+    YELLOW: JavaColor.YELLOW,
+    CYAN: JavaColor.CYAN,
+    MAGENTA: JavaColor.MAGENTA,
+    ORANGE: JavaColor.ORANGE,
+    PINK: JavaColor.PINK,
+    GRAY: JavaColor.GRAY,
+    DARK_GRAY: JavaColor.DARK_GRAY,
+    LIGHT_GRAY: JavaColor.LIGHT_GRAY,
+    toDataURL: () => g.toDataURL(),
+  };
+}
+
 const javaRandomClass = function (seed?: number) {
   return createJavaRandom(seed);
 };
@@ -663,6 +1005,8 @@ function evalJavaExpr(
       'castToDouble',
       'Collectors',
       'Stream',
+      'Color',
+      'Font',
       `return (${clean});`
     );
     return fn(
@@ -684,7 +1028,9 @@ function evalJavaExpr(
       castToShort,
       castToDouble,
       javaCollectors,
-      JavaStream
+      JavaStream,
+      JavaColor,
+      JavaFont
     );
   } catch {
     if (scope[clean] !== undefined) {
@@ -1305,11 +1651,22 @@ export async function compileAndRunJava(
     }
   }
 
+  const flushPlot = (dataUrl: string) => {
+    options.onPlot?.(dataUrl);
+    options.onEvent?.({ type: 'plot', dataUrl });
+  };
+
+  const stdDraw = createStdDraw(flushPlot);
+
   // Scope tracking for local variables
   const scope: Record<string, any> = {
     args: [],
     File: JavaFile,
     Scanner: JavaFileScanner,
+    Color: JavaColor,
+    Font: JavaFont,
+    Graphics: JavaGraphics,
+    StdDraw: stdDraw,
     ...customClasses,
     ...boundUserMethods,
   };
@@ -1583,7 +1940,7 @@ export async function compileAndRunJava(
     }
 
     // Method invocation or member expression as statement:
-    // list.addFirst(15); or zoo.add(new Dog("Rover")); or list.clear();
+    // list.addFirst(15); or zoo.add(new Dog("Rover")); or StdDraw.circle(0.5, 0.5, 0.2);
     const methodCallStmt = rawLine.match(/^([A-Za-z0-9_.]+(?:\[[^\]]+\])?)\.([A-Za-z0-9_]+)\s*\(([\s\S]*)\)\s*;?$/);
     if (methodCallStmt) {
       const targetExpr = methodCallStmt[1];

@@ -450,8 +450,13 @@ export const App: React.FC = () => {
         onStderr: (text) => {
           setLogs((prev) => [...prev, { type: 'stderr', text }]);
         },
+        onPlot: (dataUrl) => {
+          setPlots((prev) => [...prev, dataUrl]);
+        },
         onEvent: (event) => {
-          if (event.type === 'stdin-request') {
+          if (event.type === 'plot') {
+            setPlots((prev) => [...prev, event.dataUrl]);
+          } else if (event.type === 'stdin-request') {
             setPendingStdin({
               requestId: event.requestId,
               prompt: event.prompt || 'Enter input: ',
