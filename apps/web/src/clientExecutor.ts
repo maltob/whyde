@@ -103,6 +103,123 @@ function runJavaScript(
     },
   };
 
+  // In-memory Virtual File System for Node.js 'fs' emulation
+  const virtualFs = {
+    readFileSync: (filePath: string, encoding?: string) => {
+      const cleanPath = filePath.replace(/^\.\//, '');
+      const file = allFiles.find(
+        (f) => f.path === cleanPath || f.path.endsWith('/' + cleanPath) || f.path.split('/').pop() === cleanPath
+      );
+      if (!file) {
+        throw new Error(`ENOENT: no such file or directory, open '${filePath}'`);
+      }
+      return file.content;
+    },
+    writeFileSync: (filePath: string, data: any) => {
+      const cleanPath = filePath.replace(/^\.\//, '');
+      const strData = String(data);
+      const existing = allFiles.find(
+        (f) => f.path === cleanPath || f.path.endsWith('/' + cleanPath) || f.path.split('/').pop() === cleanPath
+      );
+      if (existing) {
+        existing.content = strData;
+      } else {
+        allFiles.push({ path: cleanPath, content: strData });
+      }
+    },
+    existsSync: (filePath: string) => {
+      const cleanPath = filePath.replace(/^\.\//, '');
+      return allFiles.some(
+        (f) => f.path === cleanPath || f.path.endsWith('/' + cleanPath) || f.path.split('/').pop() === cleanPath
+      );
+    },
+    readdirSync: (dirPath: string = '.') => {
+      const cleanDir = dirPath.replace(/^\.\/?/, '');
+      const entries = new Set<string>();
+      for (const f of allFiles) {
+        if (!cleanDir || f.path.startsWith(cleanDir + '/')) {
+          const sub = cleanDir ? f.path.slice(cleanDir.length + 1) : f.path;
+          entries.add(sub.split('/')[0]);
+        }
+      }
+      return Array.from(entries);
+    },
+    statSync: (filePath: string) => {
+      const cleanPath = filePath.replace(/^\.\//, '');
+      const file = allFiles.find(
+        (f) => f.path === cleanPath || f.path.endsWith('/' + cleanPath) || f.path.split('/').pop() === cleanPath
+      );
+      if (!file) {
+        throw new Error(`ENOENT: no such file or directory, stat '${filePath}'`);
+      }
+      return {
+        isFile: () => true,
+        isDirectory: () => false,
+        size: new TextEncoder().encode(file.content).length,
+      };
+    },
+  };
+
+  // Node.js 'path' emulation
+  const virtualPath = {
+    join: (...args: string[]) => args.filter(Boolean).join('/').replace(/\/+/g, '/'),
+    basename: (p: string, ext?: string) => {
+      const base = p.split('/').pop() || '';
+      return ext && base.endsWith(ext) ? base.slice(0, -ext.length) : base;
+    },
+    dirname: (p: string) => {
+      const parts = p.split('/');
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
+    },
+    extname: (p: string) => {
+      const base = p.split('/').pop() || '';
+      const dot = base.lastIndexOf('.');
+      return dot !== -1 ? base.slice(dot) : '';
+    },
+  };
+
+  // Node.js 'assert' emulation
+  const virtualAssert = Object.assign(
+    (condition: any, message?: string) => {
+      if (!condition) {
+        throw new Error(`AssertionError: ${message || 'Expression evaluated to falsy'}`);
+      }
+    },
+    {
+      ok: (val: any, msg?: string) => {
+        if (!val) throw new Error(`AssertionError [ERR_ASSERTION]: ${msg || 'The expression evaluated to a falsy value'}`);
+      },
+      strictEqual: (actual: any, expected: any, msg?: string) => {
+        if (actual !== expected) {
+          throw new Error(`AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual:   ${JSON.stringify(actual)}\n- expected: ${JSON.stringify(expected)}\n${msg || ''}`);
+        }
+      },
+      notStrictEqual: (actual: any, expected: any, msg?: string) => {
+        if (actual === expected) {
+          throw new Error(`AssertionError [ERR_ASSERTION]: Expected values not to be strictly equal: ${JSON.stringify(actual)}\n${msg || ''}`);
+        }
+      },
+      deepStrictEqual: (actual: any, expected: any, msg?: string) => {
+        const actualStr = JSON.stringify(actual);
+        const expectedStr = JSON.stringify(expected);
+        if (actualStr !== expectedStr) {
+          throw new Error(`AssertionError [ERR_ASSERTION]: Expected values to be deeply strictly equal:\n+ actual:   ${actualStr}\n- expected: ${expectedStr}\n${msg || ''}`);
+        }
+      },
+      throws: (fn: () => any, msg?: string) => {
+        let threw = false;
+        try {
+          fn();
+        } catch {
+          threw = true;
+        }
+        if (!threw) {
+          throw new Error(`AssertionError [ERR_ASSERTION]: Missing expected exception\n${msg || ''}`);
+        }
+      },
+    }
+  );
+
   const customPrompt = (msg?: string): string | null => {
     if (inputQueue.length > 0) {
       return inputQueue.shift()!;
@@ -138,6 +255,17 @@ function runJavaScript(
       customConsole,
       customPrompt,
       (modulePath: string) => {
+        // Built-in Node.js modules
+        if (modulePath === 'fs' || modulePath === 'node:fs') {
+          return virtualFs;
+        }
+        if (modulePath === 'path' || modulePath === 'node:path') {
+          return virtualPath;
+        }
+        if (modulePath === 'assert' || modulePath === 'node:assert') {
+          return virtualAssert;
+        }
+
         const file = allFiles.find((f) => f.path === modulePath || f.path.endsWith('/' + modulePath) || f.path === modulePath + '.js');
         if (file) {
           const exports: any = {};

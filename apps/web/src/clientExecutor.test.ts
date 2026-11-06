@@ -179,5 +179,41 @@ try {
       expect(res.stdout).toContain('Blocked document edit: TypeError');
       expect(res.stdout).toContain('Blocked location redirect: TypeError');
     });
+
+    it('supports Node.js core modules: fs, path, and assert in-memory', () => {
+      const nodeCode = `
+const fs = require('fs');
+const path = require('path');
+const assert = require('assert');
+
+// 1. Assert checks
+assert.strictEqual(2 + 2, 4);
+assert.ok(true);
+assert.deepStrictEqual({ a: 1 }, { a: 1 });
+
+// 2. Path checks
+const fullPath = path.join('src', 'sub', 'test.txt');
+assert.strictEqual(path.basename(fullPath), 'test.txt');
+assert.strictEqual(path.extname(fullPath), '.txt');
+
+// 3. Virtual fs read & write
+const scores = fs.readFileSync('data/scores.csv', 'utf8');
+console.log("Read scores:", scores.trim());
+
+fs.writeFileSync('output.txt', 'Computed Result: 100');
+const output = fs.readFileSync('output.txt', 'utf8');
+console.log("Written output:", output);
+`;
+      const allFiles = [
+        { path: 'src/main.js', content: nodeCode },
+        { path: 'data/scores.csv', content: 'Alice,95\nBob,88\n' },
+      ];
+
+      const res = executeClientSideCode('javascript', nodeCode, undefined, allFiles);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Read scores: Alice,95\nBob,88');
+      expect(res.stdout).toContain('Written output: Computed Result: 100');
+      expect(allFiles.some((f) => f.path === 'output.txt' && f.content === 'Computed Result: 100')).toBe(true);
+    });
   });
 });
