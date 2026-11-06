@@ -1,5 +1,5 @@
 import pako from 'pako';
-import { Project, validateProject } from '@ide/project-model';
+import { Project, validateProject, LanguageId } from '@ide/project-model';
 
 export const MAX_URL_LENGTH = 8192; // 8 KiB conservative limit per Spec Section 9.2
 export const MAX_DECOMPRESSED_BYTES = 5 * 1024 * 1024; // 5 MiB uncompressed cap
@@ -7,7 +7,7 @@ export const MAX_DECOMPRESSED_BYTES = 5 * 1024 * 1024; // 5 MiB uncompressed cap
 export interface PortableProjectPayload {
   schemaVersion: 1;
   kind: 'browser-ide-project';
-  language: 'python' | 'java' | 'cpp';
+  language: LanguageId;
   runtime: { id: string; minimum: string };
   name: string;
   entrypoint: string;
