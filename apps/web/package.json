@@ -13,6 +13,7 @@
     "@ide/execution-contracts": "workspace:*",
     "@ide/integration-contracts": "workspace:*",
     "@ide/project-model": "workspace:*",
+    "@ide/runner-cpp": "workspace:*",
     "@ide/runner-java": "workspace:*",
     "@ide/runner-python": "workspace:*",
     "@ide/sharing": "workspace:*",
@@ -24,10 +25,11 @@
     "java-parser": "^3.0.1",
     "js-beautify": "^2.0.3",
     "lucide-react": "^0.453.0",
+    "mathjs": "^15.2.0",
+    "moment": "^2.31.0",
     "prismjs": "^1.30.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@ide/runner-cpp": "workspace:*"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

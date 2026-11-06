@@ -215,5 +215,43 @@ console.log("Written output:", output);
       expect(res.stdout).toContain('Written output: Computed Result: 100');
       expect(allFiles.some((f) => f.path === 'output.txt' && f.content === 'Computed Result: 100')).toBe(true);
     });
+
+    it('supports readline, mathjs, and moment libraries seamlessly', () => {
+      const code = `
+const readline = require('readline');
+const math = require('mathjs');
+const moment = require('moment');
+
+// MathJS checks: evaluate expression and matrix determinant
+const evaluated = math.evaluate('12.7 cm to inch');
+console.log("Converted:", evaluated.toString());
+
+const det = math.det([[-1, 2], [3, 1]]);
+console.log("Determinant:", det);
+
+// Moment checks: date formatting
+const formatted = moment("2026-11-05").format("MMMM Do YYYY");
+console.log("Date:", formatted);
+
+// Readline checks
+const rl = readline.createInterface({ input: process.stdin });
+rl.question("What is your favorite color? ", (color) => {
+  console.log("Selected color: " + color);
+  rl.close();
+});
+`;
+      // Step 1: Pauses at readline question
+      const step1 = executeClientSideCode('javascript', code);
+      expect(step1.stdout).toContain('Converted: 5 inch');
+      expect(step1.stdout).toContain('Determinant: -7');
+      expect(step1.stdout).toContain('Date: November 5th 2026');
+      expect(step1.requiresStdin).toBeDefined();
+      expect(step1.requiresStdin?.prompt).toBe('What is your favorite color? ');
+
+      // Step 2: Supplies answer
+      const step2 = executeClientSideCode('javascript', code, 'Blue');
+      expect(step2.exitCode).toBe(0);
+      expect(step2.stdout).toContain('Selected color: Blue');
+    });
   });
 });

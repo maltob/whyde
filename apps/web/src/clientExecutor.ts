@@ -1,5 +1,7 @@
 import { executeJavaProgram } from './javaEngine.js';
 import { compileAndRunJava } from '@ide/runner-java';
+import * as mathjs from 'mathjs';
+import moment from 'moment';
 
 export interface InterpretedExecutionResult {
   stdout: string;
@@ -220,6 +222,20 @@ function runJavaScript(
     }
   );
 
+  // Node.js 'readline' emulation
+  const virtualReadline = {
+    createInterface: (_options?: any) => ({
+      question: (query: string, callback: (answer: string) => void) => {
+        const answer = customPrompt(query);
+        if (answer !== null) {
+          callback(answer);
+        }
+      },
+      close: () => {},
+      on: (_event: string, _listener: any) => {},
+    }),
+  };
+
   const customPrompt = (msg?: string): string | null => {
     if (inputQueue.length > 0) {
       return inputQueue.shift()!;
@@ -264,6 +280,15 @@ function runJavaScript(
         }
         if (modulePath === 'assert' || modulePath === 'node:assert') {
           return virtualAssert;
+        }
+        if (modulePath === 'readline' || modulePath === 'node:readline') {
+          return virtualReadline;
+        }
+        if (modulePath === 'mathjs' || modulePath === 'math') {
+          return mathjs;
+        }
+        if (modulePath === 'moment') {
+          return moment;
         }
 
         const file = allFiles.find((f) => f.path === modulePath || f.path.endsWith('/' + modulePath) || f.path === modulePath + '.js');
