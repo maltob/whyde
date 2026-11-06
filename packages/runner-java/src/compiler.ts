@@ -86,7 +86,135 @@ if (typeof Array !== 'undefined') {
       this.length = 0;
     };
   }
+  // Java 21 Sequenced Collections support (SequencedCollection / SequencedSet / SequencedMap)
+  if (!(Array.prototype as any).getFirst) {
+    (Array.prototype as any).getFirst = function () {
+      if (this.length === 0) throw new Error('NoSuchElementException');
+      return this[0];
+    };
+  }
+  if (!(Array.prototype as any).getLast) {
+    (Array.prototype as any).getLast = function () {
+      if (this.length === 0) throw new Error('NoSuchElementException');
+      return this[this.length - 1];
+    };
+  }
+  if (!(Array.prototype as any).addFirst) {
+    (Array.prototype as any).addFirst = function (val: any) {
+      this.unshift(val);
+    };
+  }
+  if (!(Array.prototype as any).addLast) {
+    (Array.prototype as any).addLast = function (val: any) {
+      this.push(val);
+    };
+  }
+  if (!(Array.prototype as any).removeFirst) {
+    (Array.prototype as any).removeFirst = function () {
+      if (this.length === 0) throw new Error('NoSuchElementException');
+      return this.shift();
+    };
+  }
+  if (!(Array.prototype as any).removeLast) {
+    (Array.prototype as any).removeLast = function () {
+      if (this.length === 0) throw new Error('NoSuchElementException');
+      return this.pop();
+    };
+  }
+  if (!(Array.prototype as any).reversed) {
+    (Array.prototype as any).reversed = function () {
+      return [...this].reverse();
+    };
+  }
+  // Stream API support on arrays
+  if (!(Array.prototype as any).stream) {
+    (Array.prototype as any).stream = function () {
+      return createJavaStream(this);
+    };
+  }
 }
+
+// Java Stream API emulation class
+class JavaStream {
+  private items: any[];
+  constructor(items: any[]) {
+    this.items = [...items];
+  }
+  filter(predicate: (item: any) => boolean): JavaStream {
+    return new JavaStream(this.items.filter(predicate));
+  }
+  map(mapper: (item: any) => any): JavaStream {
+    return new JavaStream(this.items.map(mapper));
+  }
+  flatMap(mapper: (item: any) => any): JavaStream {
+    return new JavaStream(this.items.flatMap((x) => {
+      const res = mapper(x);
+      return res instanceof JavaStream ? res.toList() : (Array.isArray(res) ? res : [res]);
+    }));
+  }
+  distinct(): JavaStream {
+    return new JavaStream([...new Set(this.items)]);
+  }
+  sorted(comparator?: (a: any, b: any) => number): JavaStream {
+    const copy = [...this.items];
+    if (comparator) copy.sort(comparator);
+    else copy.sort();
+    return new JavaStream(copy);
+  }
+  limit(maxSize: number): JavaStream {
+    return new JavaStream(this.items.slice(0, maxSize));
+  }
+  skip(n: number): JavaStream {
+    return new JavaStream(this.items.slice(n));
+  }
+  forEach(action: (item: any) => void): void {
+    this.items.forEach(action);
+  }
+  toList(): any[] {
+    return [...this.items];
+  }
+  collect(collector: any): any {
+    if (typeof collector === 'function') {
+      return collector(this.items);
+    }
+    return [...this.items];
+  }
+  count(): number {
+    return this.items.length;
+  }
+  reduce(identityOrAccumulator: any, accumulator?: any): any {
+    if (accumulator !== undefined) {
+      return this.items.reduce(accumulator, identityOrAccumulator);
+    }
+    return this.items.reduce(identityOrAccumulator);
+  }
+  findFirst(): any {
+    return this.items.length > 0 ? this.items[0] : null;
+  }
+  findAny(): any {
+    return this.findFirst();
+  }
+  anyMatch(predicate: (item: any) => boolean): boolean {
+    return this.items.some(predicate);
+  }
+  allMatch(predicate: (item: any) => boolean): boolean {
+    return this.items.every(predicate);
+  }
+  noneMatch(predicate: (item: any) => boolean): boolean {
+    return !this.items.some(predicate);
+  }
+}
+
+function createJavaStream(items: any[]): JavaStream {
+  return new JavaStream(items);
+}
+
+const javaCollectors = {
+  toList: () => (items: any[]) => [...items],
+  toSet: () => (items: any[]) => new Set(items),
+  joining: (delimiter: string = '') => (items: any[]) => items.map(String).join(delimiter),
+  counting: () => (items: any[]) => items.length,
+};
 
 if (typeof Number !== 'undefined') {
   if (!(Number.prototype as any).intValue) {
@@ -495,6 +623,15 @@ function evalJavaExpr(
     }
   }
 
+  // Convert Java lambdas: (a, b) -> expr or a -> expr to JS (a, b) => expr
+  clean = clean.replace(/\(([^)]*)\)\s*->/g, '($1) =>');
+  clean = clean.replace(/([A-Za-z0-9_]+)\s*->/g, '$1 =>');
+
+  // Convert Java method references: String::toUpperCase or System.out::println
+  clean = clean.replace(/String::toUpperCase/g, '((x) => String(x).toUpperCase())');
+  clean = clean.replace(/String::toLowerCase/g, '((x) => String(x).toLowerCase())');
+  clean = clean.replace(/Objects::nonNull/g, '((x) => x !== null && x !== undefined)');
+
   // Filter valid JS identifiers from scope
   const validKeys: string[] = [];
   const validVals: any[] = [];
@@ -524,6 +661,8 @@ function evalJavaExpr(
       'castToByte',
       'castToShort',
       'castToDouble',
+      'Collectors',
+      'Stream',
       `return (${clean});`
     );
     return fn(
@@ -543,7 +682,9 @@ function evalJavaExpr(
       castToChar,
       castToByte,
       castToShort,
-      castToDouble
+      castToDouble,
+      javaCollectors,
+      JavaStream
     );
   } catch {
     if (scope[clean] !== undefined) {
@@ -1023,11 +1164,153 @@ export async function compileAndRunJava(
     }
   }
 
+  // 4b. Scan Java 14+ / Java 21 Records & Custom OOP Classes across all files
+  const customClasses: Record<string, any> = {};
+
+  for (const f of project.files) {
+    if (!f.path.endsWith('.java')) continue;
+    const content = f.content;
+
+    // Scan records: record Point(int x, int y) { ... }
+    const recordRegex = /(?:public\s+|private\s+|protected\s+)?record\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*\{/g;
+    let recMatch: RegExpExecArray | null;
+    while ((recMatch = recordRegex.exec(content)) !== null) {
+      const recName = recMatch[1];
+      const rawParams = recMatch[2];
+      const paramNames = rawParams
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => p.split(/\s+/).pop()!);
+
+      // Construct ES6 class function for record
+      const RecordClass = function (this: any, ...args: any[]) {
+        if (!(this instanceof (RecordClass as any))) {
+          return new (RecordClass as any)(...args);
+        }
+        const values: Record<string, any> = {};
+        for (let i = 0; i < paramNames.length; i++) {
+          const p = paramNames[i];
+          const val = args[i];
+          values[p] = val;
+          (this as any)[p] = () => val;
+        }
+        (this as any).__recordValues = values;
+      };
+
+      RecordClass.prototype.toString = function (this: any) {
+        const fieldStr = paramNames.map((p) => `${p}=${this.__recordValues ? this.__recordValues[p] : ''}`).join(', ');
+        return `${recName}[${fieldStr}]`;
+      };
+
+      RecordClass.prototype.equals = function (this: any, other: any) {
+        if (!other || !(other instanceof (RecordClass as any))) return false;
+        return paramNames.every((p) => this.__recordValues[p] === (other as any).__recordValues?.[p]);
+      };
+
+      customClasses[recName] = RecordClass;
+    }
+
+    // Scan custom classes: [public/abstract] class Name [extends Base] [implements SoundEmitter] { ... }
+    const classRegex = /(?:public\s+|abstract\s+|final\s+)*class\s+([A-Za-z0-9_]+)(?:\s+extends\s+([A-Za-z0-9_]+))?(?:\s+implements\s+[A-Za-z0-9_,\s]+)?\s*\{/g;
+    let clsMatch: RegExpExecArray | null;
+    while ((clsMatch = classRegex.exec(content)) !== null) {
+      const clsName = clsMatch[1];
+      const baseName = clsMatch[2];
+      if (clsName === 'Main' && content.includes('public static void main')) {
+        // Skip entrypoint class from being re-instantiated
+        continue;
+      }
+
+      // Find class body braces
+      const startIndex = clsMatch.index + clsMatch[0].length;
+      let depth = 1;
+      let endIndex = startIndex;
+      for (let ci = startIndex; ci < content.length; ci++) {
+        if (content[ci] === '{') depth++;
+        else if (content[ci] === '}') {
+          depth--;
+          if (depth === 0) {
+            endIndex = ci;
+            break;
+          }
+        }
+      }
+      const classBody = content.slice(startIndex, endIndex);
+
+      // Transpile class body:
+      // Strip abstract methods: public abstract String emitSound();
+      let jsClassBody = classBody;
+      jsClassBody = jsClassBody.replace(
+        /(?:public\s+|private\s+|protected\s+|abstract\s+|final\s+)+(?:void|int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*\([^)]*\)\s*;/g,
+        ''
+      );
+
+      // Constructors: [public] ClsName(params) { ... } -> constructor(params) { ... }
+      const constructorRegex = new RegExp(`(?:(?:public|private|protected)\\s+)?${clsName}\\s*\\(([^)]*)\\)\\s*\\{`, 'g');
+      jsClassBody = jsClassBody.replace(constructorRegex, (match, rawParams) => {
+        const cleanParams = rawParams
+          .split(',')
+          .map((p: string) => p.trim())
+          .filter(Boolean)
+          .map((p: string) => p.split(/\s+/).pop()!)
+          .join(', ');
+        return `constructor(${cleanParams}) {`;
+      });
+
+      // Strip Java field types: public int item; -> item; or private IntNode first; -> first;
+      jsClassBody = jsClassBody.replace(
+        /(?:public\s+|private\s+|protected\s+)(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*(?:=\s*([^;]+))?;/g,
+        (match, fieldName, initVal) => (initVal !== undefined ? `${fieldName} = ${initVal};` : `${fieldName};`)
+      );
+
+      // Strip method return types & parameter types: public void addFirst(int x) -> addFirst(x)
+      jsClassBody = jsClassBody.replace(
+        /(?:public\s+|private\s+|protected\s+|abstract\s+|final\s+)+(?:void|int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*\{/g,
+        (match, mName, rawParams) => {
+          if (mName === 'constructor' || mName === 'main') return match;
+          const cleanParams = rawParams
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter(Boolean)
+            .map((p: string) => p.split(/\s+/).pop()!)
+            .join(', ');
+          return `${mName}(${cleanParams}) {`;
+        }
+      );
+
+      // Transpile method body statements: local vars, etc.
+      jsClassBody = jsClassBody.replace(
+        /(?:int|double|float|long|boolean|var|String|[A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_]+)\s*=\s*/g,
+        'let $1 = '
+      );
+
+      // Convert .length() to .length for strings/arrays
+      jsClassBody = jsClassBody.replace(/\.length\(\)/g, '.length');
+
+      // Build class factory
+      const extendsClause = baseName && customClasses[baseName] ? `extends __customClasses.${baseName}` : '';
+      const classScript = `
+        return class ${clsName} ${extendsClause} {
+          ${jsClassBody}
+        };
+      `;
+
+      try {
+        const factory = new Function('__customClasses', classScript);
+        customClasses[clsName] = factory(customClasses);
+      } catch (err) {
+        // If compilation fails, continue gracefully
+      }
+    }
+  }
+
   // Scope tracking for local variables
   const scope: Record<string, any> = {
     args: [],
     File: JavaFile,
     Scanner: JavaFileScanner,
+    ...customClasses,
     ...boundUserMethods,
   };
 
@@ -1299,15 +1582,20 @@ export async function compileAndRunJava(
       throw err;
     }
 
-    // ArrayList add: list.add(val)
-    const addMatch = rawLine.match(/([A-Za-z0-9_]+)\.add\(([^)]+)\);/);
-    if (addMatch) {
-      const listName = addMatch[1];
-      const val = evalJavaExpr(addMatch[2], scope, helperClasses);
-      if (scope[listName] && Array.isArray(scope[listName])) {
-        scope[listName].push(val);
+    // Method invocation or member expression as statement:
+    // list.addFirst(15); or zoo.add(new Dog("Rover")); or list.clear();
+    const methodCallStmt = rawLine.match(/^([A-Za-z0-9_.]+(?:\[[^\]]+\])?)\.([A-Za-z0-9_]+)\s*\(([\s\S]*)\)\s*;?$/);
+    if (methodCallStmt) {
+      const targetExpr = methodCallStmt[1];
+      const mName = methodCallStmt[2];
+      const argsExpr = methodCallStmt[3];
+      const targetObj = evalJavaExpr(targetExpr, scope, helperClasses);
+      if (targetObj && typeof targetObj[mName] === 'function') {
+        const parts = splitArguments(argsExpr);
+        const evaledArgs = parts.map((a) => evalJavaExpr(a, scope, helperClasses));
+        targetObj[mName](...evaledArgs);
+        return;
       }
-      return;
     }
 
     // General variable assignment: int x = 42; Boolean b = true; var msg = "Hello"; x = 99;
